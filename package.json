@@ -1,0 +1,21 @@
+{
+  "name": "vibesom-api",
+  "version": "0.0.0",
+  "description": "api para o app vibesom",
+  "main": "src/server.js",
+  "author": {
+    "name": "Felipe F.",
+    "url": "https://github.com/felipesansi"
+  },
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.2",
+    "pino-pretty": "^13.1.3"
+  }
+}
