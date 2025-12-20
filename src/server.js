@@ -14,6 +14,11 @@ servidor.register(cors, {
   methods: ["GET"]
 })
 
+// Rota raiz para teste
+servidor.get('/', async () => {
+  return { status: "VibeSom API Online", versao: "1.0.0" }
+})
+
 servidor.register(rotasPesquisa)
 servidor.register(rotasTransmissao)
 
