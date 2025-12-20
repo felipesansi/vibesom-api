@@ -35,21 +35,24 @@ export default async function rotasTransmissao(servidor) {
       });
 
       // Tenta encontrar o melhor formato de áudio
-      let formato = ytdl.chooseFormat(informacoes.formats, { 
+      const formatos = informacoes.formats || [];
+      console.log(`[DEBUG] Formatos encontrados: ${formatos.length}`);
+
+      let formato = ytdl.chooseFormat(formatos, { 
         filter: 'audioonly', 
         quality: 'highestaudio' 
       });
 
       // Fallback: se não achar 'audioonly', pega qualquer um que tenha áudio
       if (!formato) {
-        formato = ytdl.chooseFormat(informacoes.formats, { 
+        formato = ytdl.chooseFormat(formatos, { 
           filter: f => f.hasAudio,
           quality: 'highestaudio'
         });
       }
 
       if (!formato) {
-        throw new Error('Nenhum formato de áudio compatível foi encontrado.');
+        throw new Error(`Nenhum formato de áudio compatível encontrado entre ${formatos.length} opções.`);
       }
 
       // Ponte para o streaming
@@ -67,7 +70,6 @@ export default async function rotasTransmissao(servidor) {
         agent: agente
       });
 
-      /* 
       let processoFFmpeg;
       try {
         processoFFmpeg = ffmpeg(fluxoAudio)
@@ -78,35 +80,24 @@ export default async function rotasTransmissao(servidor) {
           ])
           .audioBitrate(128)
           .format('mp3')
-          .on('start', (comando) => {
-          })
           .on('error', (erro) => {
             console.error('[ERROR] Erro FFmpeg:', erro.message);
             if (!ponte.destroyed) ponte.destroy(erro);
-          })
-          .on('end', () => {
           });
 
         // Pipeline: YouTube -> FFmpeg -> Ponte -> Fastify
         processoFFmpeg.pipe(ponte, { end: true });
       } catch (erro) {
         console.error('[CRITICAL] FFmpeg falhou ao iniciar:', erro.message);
-        // Se o FFmpeg falhar, tentamos enviar o fluxo bruto
         fluxoAudio.pipe(ponte);
       }
-      */
-
-      // Teste: Pipe direto sem FFmpeg
-      fluxoAudio.pipe(ponte);
 
       // Limpeza ao fechar a conexão
       requisicao.raw.on('close', () => {
         if (!fluxoAudio.destroyed) fluxoAudio.destroy();
-        /*
         if (processoFFmpeg) {
           processoFFmpeg.kill();
         }
-        */
         if (!ponte.destroyed) ponte.destroy();
       });
 
