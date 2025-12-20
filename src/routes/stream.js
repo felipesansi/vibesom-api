@@ -67,6 +67,7 @@ export default async function rotasTransmissao(servidor) {
         agent: agente
       });
 
+      /* 
       let processoFFmpeg;
       try {
         processoFFmpeg = ffmpeg(fluxoAudio)
@@ -93,13 +94,19 @@ export default async function rotasTransmissao(servidor) {
         // Se o FFmpeg falhar, tentamos enviar o fluxo bruto
         fluxoAudio.pipe(ponte);
       }
+      */
+
+      // Teste: Pipe direto sem FFmpeg
+      fluxoAudio.pipe(ponte);
 
       // Limpeza ao fechar a conexão
       requisicao.raw.on('close', () => {
         if (!fluxoAudio.destroyed) fluxoAudio.destroy();
+        /*
         if (processoFFmpeg) {
           processoFFmpeg.kill();
         }
+        */
         if (!ponte.destroyed) ponte.destroy();
       });
 
