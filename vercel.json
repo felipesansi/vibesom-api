@@ -1,0 +1,12 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/src/server.js"
+        }
+    ],
+    "env": {
+        "NODE_ENV": "production"
+    }
+}
