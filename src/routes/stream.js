@@ -20,15 +20,37 @@ export default async function rotasTransmissao(servidor) {
       // Criar um agente para gerenciar as assinaturas e evitar 403
       const agente = ytdl.createAgent();
 
-      // Obter informações do vídeo
+      // Obter informações do vídeo com headers mais robustos
       const informacoes = await ytdl.getInfo(urlVideo, { 
         agent: agente,
         requestOptions: {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': 'https://www.youtube.com',
+            'Referer': 'https://www.youtube.com/'
           }
         }
       });
+
+      // Tenta encontrar o melhor formato de áudio
+      let formato = ytdl.chooseFormat(informacoes.formats, { 
+        filter: 'audioonly', 
+        quality: 'highestaudio' 
+      });
+
+      // Fallback: se não achar 'audioonly', pega qualquer um que tenha áudio
+      if (!formato) {
+        formato = ytdl.chooseFormat(informacoes.formats, { 
+          filter: f => f.hasAudio,
+          quality: 'highestaudio'
+        });
+      }
+
+      if (!formato) {
+        throw new Error('Nenhum formato de áudio compatível foi encontrado.');
+      }
 
       // Ponte para o streaming
       const ponte = new PassThrough();
@@ -38,10 +60,9 @@ export default async function rotasTransmissao(servidor) {
       resposta.header('Accept-Ranges', 'bytes');
       resposta.header('Cache-Control', 'no-cache');
 
-      // Criar o fluxo de áudio do YouTube
+      // Criar o fluxo de áudio do YouTube usando o formato escolhido
       const fluxoAudio = ytdl.downloadFromInfo(informacoes, {
-        filter: 'audioonly',
-        quality: 'highestaudio',
+        format: formato,
         highWaterMark: 1 << 25,
         agent: agente
       });
