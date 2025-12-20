@@ -22,12 +22,19 @@ servidor.get('/', async () => {
 servidor.register(rotasPesquisa)
 servidor.register(rotasTransmissao)
 
-// Para rodar localmente
-if (process.env.NODE_ENV !== 'production') {
+// Para rodar localmente ou em serviços como Render/Railway
+const port = process.env.PORT || 3333;
+
+if (process.env.VERCEL) {
+  // Export para o Vercel (opcional, já que está usando serverless lá)
+  console.log('Rodando modo Vercel');
+} else {
   servidor.listen({
-    port: 3333,
+    port: port,
     host: '0.0.0.0'
-  })
+  }).then(() => {
+    console.log(`Servidor rodando em: http://0.0.0.0:${port}`);
+  });
 }
 
 // Export para o Vercel
