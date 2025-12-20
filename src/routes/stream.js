@@ -17,27 +17,35 @@ export default async function rotasTransmissao(servidor) {
     const urlVideo = `https://www.youtube.com/watch?v=${idVideo}`;
 
     try {
-      // Tenta carregar cookies da variável de ambiente (string JSON ou formato Netscape)
-      let cookies = [];
+      // Suporte avançado a cookies (JSON ou Formato Netscape)
+      let cookies = null;
       if (process.env.YOUTUBE_COOKIE) {
         try {
+          // Tenta ler como JSON (Export do EditThisCookie)
           cookies = JSON.parse(process.env.YOUTUBE_COOKIE);
+          console.log('[DEBUG] Cookies JSON carregados com sucesso.');
         } catch (e) {
-          // Se não for JSON, assume que é a string bruta de cookies
-          cookies = process.env.YOUTUBE_COOKIE;
+          // Se falhar o JSON, limpa a string para usar como header direto (Netscape/Plain Text)
+          cookies = process.env.YOUTUBE_COOKIE.trim();
+          console.log('[DEBUG] Cookies carregados como string bruta.');
         }
       }
 
-      // Criar um agente com cookies para evitar bloqueio de bot
+      // Criar o agente com os cookies disponíveis
+      // Se for array (JSON), passa pro createAgent. Se for string, usaremos no header.
       const agente = ytdl.createAgent(Array.isArray(cookies) ? cookies : undefined);
 
-      // Obter informações do vídeo
+      // Obter informações do vídeo com Headers de Navegador Real
       const informacoes = await ytdl.getInfo(urlVideo, { 
         agent: agente,
         requestOptions: {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'cookie': typeof cookies === 'string' ? cookies : undefined 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Cookie': typeof cookies === 'string' ? cookies : undefined
           }
         }
       });
