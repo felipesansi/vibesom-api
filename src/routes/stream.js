@@ -121,9 +121,19 @@ export default async function rotasTransmissao(servidor) {
 
     } catch (erro) {
       console.error('[ERROR] Erro na transmissao YouTube:', erro.message);
+      
+      // Se chegamos aqui, vamos tentar dar uma dica do que aconteceu
+      let dica = erro.message;
+      if (dica.includes('Sign in')) {
+        dica = "Bloqueio de Bot do YouTube. Adicione o YOUTUBE_COOKIE no painel do servidor.";
+      } else if (dica.includes('No playable formats')) {
+        dica = "YouTube escondeu os formatos. Isso acontece em servidores bloqueados como Vercel. Tente usar o Render ou adicionar Cookies.";
+      }
+
       return resposta.status(500).send({ 
-        erro: 'Erro ao processar áudio do YouTube',
-        detalhes: erro.message 
+        erro: 'Erro no servidor de streaming',
+        detalhes: dica,
+        ajuda: "Se estiver na Vercel, mude para o Render.com. O Vercel é altamente bloqueado pelo YouTube."
       });
     }
   });
