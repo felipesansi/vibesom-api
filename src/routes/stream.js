@@ -1,140 +1,61 @@
-import ytdl from '@distube/ytdl-core';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from '@ffmpeg-installer/ffmpeg';
-import { PassThrough } from 'stream';
+import axios from 'axios';
 
-// Configura o caminho do FFmpeg
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+const INSTANCIAS_PIPED = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.rekindle.ph',
+  'https://api.piped.privacydev.net'
+];
 
 export default async function rotasTransmissao(servidor) {
   servidor.get('/stream/:idVideo', async (requisicao, resposta) => {
     const { idVideo } = requisicao.params;
 
-    if (!ytdl.validateID(idVideo)) {
-      return resposta.status(400).send({ erro: 'ID do YouTube inválido' });
+    if (!idVideo) {
+      return resposta.status(400).send({ erro: 'ID do vídeo é obrigatório' });
     }
 
-    const urlVideo = `https://www.youtube.com/watch?v=${idVideo}`;
-
-    try {
-      // Suporte avançado a cookies (JSON ou Formato Netscape)
-      let cookies = null;
-      if (process.env.YOUTUBE_COOKIE) {
-        try {
-          // Tenta ler como JSON (Export do EditThisCookie)
-          cookies = JSON.parse(process.env.YOUTUBE_COOKIE);
-          console.log('[DEBUG] Cookies JSON carregados com sucesso.');
-        } catch (e) {
-          // Se falhar o JSON, limpa a string para usar como header direto (Netscape/Plain Text)
-          cookies = process.env.YOUTUBE_COOKIE.trim();
-          console.log('[DEBUG] Cookies carregados como string bruta.');
-        }
-      }
-
-      // Criar o agente com os cookies disponíveis
-      // Se for array (JSON), passa pro createAgent. Se for string, usaremos no header.
-      const agente = ytdl.createAgent(Array.isArray(cookies) ? cookies : undefined);
-
-      // Obter informações do vídeo com Headers de Navegador Real
-      const informacoes = await ytdl.getInfo(urlVideo, { 
-        agent: agente,
-        requestOptions: {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Cookie': typeof cookies === 'string' ? cookies : undefined
-          }
-        }
-      });
-
-      // Tenta encontrar o melhor formato de áudio
-      const formatos = informacoes.formats || [];
-      console.log(`[DEBUG] Formatos encontrados: ${formatos.length}`);
-
-      let formato = ytdl.chooseFormat(formatos, { 
-        filter: 'audioonly', 
-        quality: 'highestaudio' 
-      });
-
-      // Fallback: se não achar 'audioonly', pega qualquer um que tenha áudio
-      if (!formato) {
-        formato = ytdl.chooseFormat(formatos, { 
-          filter: f => f.hasAudio,
-          quality: 'highestaudio'
-        });
-      }
-
-      if (!formato) {
-        throw new Error(`Nenhum formato de áudio compatível encontrado entre ${formatos.length} opções.`);
-      }
-
-      // Ponte para o streaming
-      const ponte = new PassThrough();
-
-      // Configurar headers de resposta
-      resposta.type('audio/mpeg');
-      resposta.header('Accept-Ranges', 'bytes');
-      resposta.header('Cache-Control', 'no-cache');
-
-      // Criar o fluxo de áudio do YouTube usando o formato escolhido
-      const fluxoAudio = ytdl.downloadFromInfo(informacoes, {
-        format: formato,
-        highWaterMark: 1 << 25,
-        agent: agente
-      });
-
-      let processoFFmpeg;
+    for (const instancia of INSTANCIAS_PIPED) {
       try {
-        processoFFmpeg = ffmpeg(fluxoAudio)
-          .inputOptions([
-            '-reconnect 1',
-            '-reconnect_streamed 1',
-            '-reconnect_delay_max 5'
-          ])
-          .audioBitrate(128)
-          .format('mp3')
-          .on('error', (erro) => {
-            console.error('[ERROR] Erro FFmpeg:', erro.message);
-            if (!ponte.destroyed) ponte.destroy(erro);
-          });
+        // Obtém os dados de stream do vídeo
+        const { data } = await axios.get(`${instancia}/streams/${idVideo}`, {
+          timeout: 4000
+        });
 
-        // Pipeline: YouTube -> FFmpeg -> Ponte -> Fastify
-        processoFFmpeg.pipe(ponte, { end: true });
+        // Tenta encontrar o melhor stream de áudio (M4A é ótimo para dispositivos móveis)
+        // Filtrando por formato e qualidade para garantir que toque em qualquer player
+        const audioStream = data.audioStreams.find(s => s.codec === 'opus') || 
+                           data.audioStreams.find(s => s.format === 'M4A') ||
+                           data.audioStreams[0];
+
+        if (!audioStream || !audioStream.url) continue;
+
+        console.log(`[SUCESSO] Link de áudio obtido via ${instancia}`);
+
+        // Adicionamos headers para ajudar o player do App a gerenciar o cache e o tipo
+        resposta.header('Cache-Control', 'public, max-age=3600');
+        
+        // Redirecionamento 302 (Encontrado)
+        // O App receberá o link direto da CDN do YouTube/Google que o Piped extraiu
+        // Isso remove a carga de processamento do seu servidor Vercel.
+        return resposta.redirect(302, audioStream.url);
+
       } catch (erro) {
-        console.error('[CRITICAL] FFmpeg falhou ao iniciar:', erro.message);
-        fluxoAudio.pipe(ponte);
+        console.error(`[FALHA] Instância ${instancia} falhou no stream:`, erro.message);
+        continue;
       }
-
-      // Limpeza ao fechar a conexão
-      requisicao.raw.on('close', () => {
-        if (!fluxoAudio.destroyed) fluxoAudio.destroy();
-        if (processoFFmpeg) {
-          processoFFmpeg.kill();
-        }
-        if (!ponte.destroyed) ponte.destroy();
-      });
-
-      return resposta.send(ponte);
-
-    } catch (erro) {
-      console.error('[ERROR] Erro na transmissao YouTube:', erro.message);
-      
-      // Se chegamos aqui, vamos tentar dar uma dica do que aconteceu
-      let dica = erro.message;
-      if (dica.includes('Sign in')) {
-        dica = "Bloqueio de Bot do YouTube. Adicione o YOUTUBE_COOKIE no painel do servidor.";
-      } else if (dica.includes('No playable formats')) {
-        dica = "YouTube escondeu os formatos. Isso acontece em servidores bloqueados como Vercel. Tente usar o Render ou adicionar Cookies.";
-      }
-
-      return resposta.status(500).send({ 
-        erro: 'Erro no servidor de streaming',
-        detalhes: dica,
-        ajuda: "Se estiver na Vercel, mude para o Render.com. O Vercel é altamente bloqueado pelo YouTube."
-      });
     }
+
+    return resposta.status(503).send({ 
+      erro: 'Não foi possível gerar o link de áudio',
+      ajuda: 'Tente outro vídeo ou aguarde alguns segundos.'
+    });
+  });
+
+  // Rota extra para Audius (Opcional, mas muito estável)
+  servidor.get('/audius/stream/:id', async (requisicao, resposta) => {
+    const { id } = requisicao.params;
+    // Redireciona direto para a API oficial da Audius que é livre e sem anúncios
+    return resposta.redirect(302, `https://discoveryprovider.audius.co/v1/tracks/${id}/stream?app_name=VIBESOM`);
   });
 }
+

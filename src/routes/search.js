@@ -1,4 +1,11 @@
-import youtube from 'youtube-search-api';
+import axios from 'axios';
+
+// Lista de instâncias públicas do Piped (fallback caso uma caia)
+const INSTANCIAS_PIPED = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.rekindle.ph',
+  'https://api.piped.privacydev.net'
+];
 
 export default async function rotasPesquisa(servidor) {
   servidor.get('/pesquisa', async (requisicao, resposta) => {
@@ -8,23 +15,37 @@ export default async function rotasPesquisa(servidor) {
       return resposta.status(400).send({ erro: 'Termo de busca vazio' });
     }
 
-    try {
-      // Busca no YouTube (sem precisar de API Key)
-      const resultados = await youtube.GetListByKeyword(termo, false, 15);
-      
-      const musicas = resultados.items
-        .filter(item => item.type === 'video') // Garante que são vídeos
-        .map(item => ({
-          id: item.id,
-          titulo: item.title,
-          artista: item.channelTitle || 'YouTube Music',
-          capa: item.thumbnail.thumbnails[0].url
-        }));
+    // Tenta as instâncias uma por uma
+    for (const instancia of INSTANCIAS_PIPED) {
+      try {
+        const { data } = await axios.get(`${instancia}/search`, {
+          params: { q: termo, filter: 'music_videos' },
+          timeout: 5000
+        });
 
-      return musicas;
-    } catch (erro) {
-      console.error('Erro na busca YouTube:', erro.message);
-      return resposta.status(500).send({ erro: 'Erro ao buscar no YouTube' });
+        if (!data || !data.streams) continue;
+
+        const musicas = data.streams
+          .filter(item => item.type === 'stream')
+          .map(item => ({
+            id: item.url.split('v=')[1],
+            titulo: item.title,
+            artista: item.uploaderName,
+            capa: item.thumbnail,
+            duracao: item.duration,
+            views: item.views
+          }));
+
+        return musicas;
+      } catch (erro) {
+        console.error(`Instância ${instancia} falhou na busca.`);
+        continue;
+      }
     }
+
+    return resposta.status(503).send({ 
+      erro: 'Serviço temporariamente indisponível',
+      detalhes: 'Todas as instâncias de busca falharam. Tente novamente em instantes.'
+    });
   });
 }
