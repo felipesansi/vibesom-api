@@ -6,55 +6,56 @@ export default async function rotasTransmissao(servidor) {
     const { idVideo } = requisicao.params;
     const youtubeUrl = `https://www.youtube.com/watch?v=${idVideo}`;
 
-    // TENTATIVA 1: COBALT COM HEADERS DE NAVEGADOR (Mais potente)
+    // 1. TENTATIVA COM PIPED (Instâncias que ainda funcionam com Vercel)
+    const instanciasPiped = [
+      'https://pipedapi.lunar.icu',
+      'https://api-piped.mha.fi',
+      'https://pipedapi.oxit.uk'
+    ];
+
+    for (const api of instanciasPiped) {
+      try {
+        const res = await axios.get(`${api}/streams/${idVideo}`, { timeout: 3000 });
+        const stream = res.data.audioStreams.find(s => s.format === 'M4A') || res.data.audioStreams[0];
+        if (stream?.url) return resposta.status(302).redirect(stream.url);
+      } catch (e) { continue; }
+    }
+
+    // 2. TENTATIVA COM A NOVA API DO COBALT (v10)
     try {
+      // O Cobalt agora exige headers específicos e mudou o endpoint
       const cobalt = await axios.post('https://api.cobalt.tools/api/json', {
         url: youtubeUrl,
         downloadMode: 'audio',
         audioFormat: 'mp3'
       }, {
         headers: {
-          'Origin': 'https://cobalt.tools',
-          'Referer': 'https://cobalt.tools/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        timeout: 5000
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
+        }
       });
 
-      if (cobalt.data?.url) {
-        return resposta.status(302).redirect(cobalt.data.url);
+      // Na v10, a URL pode vir dentro de 'url' ou 'picker'
+      const streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
+      
+      if (streamUrl) {
+        return resposta.status(302).redirect(streamUrl);
       }
     } catch (e) {
-      console.log("Cobalt falhou, tentando Invidious...");
+      console.error("Cobalt v10 falhou ou IP bloqueado.");
     }
 
-    // TENTATIVA 2: INVIDIOUS (Instância com Proxy próprio)
-    const invidiousInstances = [
-      'https://invidious.flokinet.to',
-      'https://iv.ggtyler.dev',
-      'https://invidious.projectsegfau.lt'
-    ];
-
-    for (const inst of invidiousInstances) {
-      try {
-        const res = await axios.get(`${inst}/api/v1/videos/${idVideo}`, { timeout: 3000 });
-        const format = res.data.adaptiveFormats.find(f => f.container === 'm4a' || f.type.includes('audio/mp4'));
-        if (format?.url) {
-          return resposta.status(302).redirect(format.url);
-        }
-      } catch (err) { continue; }
-    }
-
-    // ÚLTIMO RECURSO: Redirecionar para um serviço de terceiro estável
-    // Se nada funcionar, o app do usuário tenta abrir o link via esse serviço
-    return resposta.status(302).redirect(`https://api.cobalt.tools/api/json?url=${youtubeUrl}`);
+    return resposta.status(503).send({ 
+      erro: "Todas as fontes falharam",
+      ajuda: "O Google bloqueou este IP da Vercel. Tente novamente em instantes." 
+    });
   });
 
-  // AUDIUS - Usando o nó da Cloudflare (mais rápido do mundo)
+  // ROTA AUDIUS (A mais estável)
   servidor.get('/audius/stream/:id', async (requisicao, resposta) => {
     const { id } = requisicao.params;
-    // O ID deve ser o numérico ou o slug correto.
-    const url = `https://audius-discovery-1.ledger-nodes.com/v1/tracks/${id}/stream?app_name=VIBESOM`;
-    return resposta.status(302).redirect(url);
+    // Usando o gateway oficial de redirecionamento do Audius
+    return resposta.status(302).redirect(`https://discoveryprovider.audius.co/v1/tracks/${id}/stream?app_name=VIBESOM`);
   });
 }
