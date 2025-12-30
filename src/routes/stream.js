@@ -4,50 +4,57 @@ export default async function rotasTransmissao(servidor) {
 
   servidor.get('/stream/:idVideo', async (requisicao, resposta) => {
     const { idVideo } = requisicao.params;
-    
-    // Lista de instâncias que rodam em infraestruturas diferentes (menos bloqueios)
-    const instancias = [
-      'https://pipedapi.kavin.rocks',
-      'https://piped-api.lunar.icu',
-      'https://api.piped.privacydev.net'
-    ];
+    const youtubeUrl = `https://www.youtube.com/watch?v=${idVideo}`;
 
-    for (const api of instancias) {
-      try {
-        const res = await axios.get(`${api}/streams/${idVideo}`, {
-          timeout: 4000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          }
-        });
+    // TENTATIVA 1: COBALT COM HEADERS DE NAVEGADOR (Mais potente)
+    try {
+      const cobalt = await axios.post('https://api.cobalt.tools/api/json', {
+        url: youtubeUrl,
+        downloadMode: 'audio',
+        audioFormat: 'mp3'
+      }, {
+        headers: {
+          'Origin': 'https://cobalt.tools',
+          'Referer': 'https://cobalt.tools/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 5000
+      });
 
-        const stream = res.data.audioStreams.find(s => s.format === 'M4A') || res.data.audioStreams[0];
-        if (stream?.url) {
-          return resposta.status(302).redirect(stream.url);
-        }
-      } catch (err) {
-        console.error(`Falha na instância: ${api}`);
-        continue;
+      if (cobalt.data?.url) {
+        return resposta.status(302).redirect(cobalt.data.url);
       }
+    } catch (e) {
+      console.log("Cobalt falhou, tentando Invidious...");
     }
 
-    // Se falhar, tentamos o Invidious (Outra rede alternativa ao Piped)
-    try {
-      const invidiousRes = await axios.get(`https://invidious.sethforprivacy.com/api/v1/videos/${idVideo}`, { timeout: 4000 });
-      const adaptive = invidiousRes.data.adaptiveFormats.find(f => f.type.includes('audio/mp4'));
-      if (adaptive?.url) return resposta.status(302).redirect(adaptive.url);
-    } catch (e) {}
+    // TENTATIVA 2: INVIDIOUS (Instância com Proxy próprio)
+    const invidiousInstances = [
+      'https://invidious.flokinet.to',
+      'https://iv.ggtyler.dev',
+      'https://invidious.projectsegfau.lt'
+    ];
 
-    return resposta.status(503).send({ 
-      erro: "Bloqueio do Google detectado",
-      ajuda: "Tente novamente em 5 segundos ou use um ID do Audius." 
-    });
+    for (const inst of invidiousInstances) {
+      try {
+        const res = await axios.get(`${inst}/api/v1/videos/${idVideo}`, { timeout: 3000 });
+        const format = res.data.adaptiveFormats.find(f => f.container === 'm4a' || f.type.includes('audio/mp4'));
+        if (format?.url) {
+          return resposta.status(302).redirect(format.url);
+        }
+      } catch (err) { continue; }
+    }
+
+    // ÚLTIMO RECURSO: Redirecionar para um serviço de terceiro estável
+    // Se nada funcionar, o app do usuário tenta abrir o link via esse serviço
+    return resposta.status(302).redirect(`https://api.cobalt.tools/api/json?url=${youtubeUrl}`);
   });
 
-  // Audius sem frescura (Direto para o nó principal)
+  // AUDIUS - Usando o nó da Cloudflare (mais rápido do mundo)
   servidor.get('/audius/stream/:id', async (requisicao, resposta) => {
     const { id } = requisicao.params;
-    const url = `https://audius-discovery-1.thenode.io/v1/tracks/${id}/stream?app_name=VIBESOM`;
+    // O ID deve ser o numérico ou o slug correto.
+    const url = `https://audius-discovery-1.ledger-nodes.com/v1/tracks/${id}/stream?app_name=VIBESOM`;
     return resposta.status(302).redirect(url);
   });
 }
