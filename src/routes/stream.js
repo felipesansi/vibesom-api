@@ -1,70 +1,56 @@
 import axios from 'axios';
 
 const INSTANCIAS_PIPED = [
-  'https://api.piped.victr.me',
-  'https://pipedapi.kavin.rocks',
-  'https://piped-api.garudalinux.org',
-  'https://api-piped.mha.fi'
+  'https://pipedapi.oxit.uk',
+  'https://api-piped.mha.fi',
+  'https://pipedapi.astartes.nl',
+  'https://pipedapi.drgns.space'
 ];
 
 export default async function rotasTransmissao(servidor) {
+  
+  // ROTA YOUTUBE (PIPED + COBALT)
   servidor.get('/stream/:idVideo', async (requisicao, resposta) => {
     const { idVideo } = requisicao.params;
     const youtubeUrl = `https://www.youtube.com/watch?v=${idVideo}`;
 
-    // 1. TENTATIVA COM PIPED (Rápido e direto)
     for (const instancia of INSTANCIAS_PIPED) {
       try {
         const { data } = await axios.get(`${instancia}/streams/${idVideo}`, { 
-          timeout: 3500,
+          timeout: 3000,
           headers: { 'User-Agent': 'Mozilla/5.0' }
         });
 
-        const audioStream = data.audioStreams.find(s => s.format === 'M4A') || data.audioStreams[0];
-        
-        if (audioStream?.url) {
-          console.log(`[PIPED] Sucesso via ${instancia}`);
-          return resposta.redirect(302, audioStream.url);
+        const audio = data.audioStreams?.find(s => s.format === 'M4A') || data.audioStreams?.[0];
+        if (audio?.url) {
+          return resposta.status(302).redirect(audio.url);
         }
-      } catch (e) {
-        console.error(`[PIPED] Falha na instância ${instancia}`);
-        continue;
-      }
+      } catch (e) { continue; }
     }
 
-    // 2. PLANO B: COBALT API (Extremamente resiliente)
+    // Fallback Cobalt com Headers de Browser
     try {
-      console.log(`[COBALT] Tentando recuperar áudio para: ${idVideo}`);
-      const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', {
-        url: youtubeUrl,
-        downloadMode: 'audio',
-        audioFormat: 'mp3',
-        audioBitrate: '128'
-      }, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        timeout: 6000
-      });
+      const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', 
+        { url: youtubeUrl, downloadMode: 'audio' },
+        { headers: { 'Origin': 'https://cobalt.tools', 'Referer': 'https://cobalt.tools/' } }
+      );
+      if (cobaltRes.data?.url) return resposta.status(302).redirect(cobaltRes.data.url);
+    } catch (e) {}
 
-      if (cobaltRes.data?.url) {
-        return resposta.redirect(302, cobaltRes.data.url);
-      }
-    } catch (e) {
-      console.error(`[COBALT] Falha crítica:`, e.message);
-    }
-
-    // 3. SE TUDO FALHAR
-    return resposta.status(503).send({ 
-      erro: 'Serviço temporariamente indisponível',
-      ajuda: 'O Google bloqueou as requisições. Tente novamente em instantes.' 
-    });
+    return resposta.status(503).send({ erro: 'Não foi possível obter o áudio' });
   });
 
-  // Audius permanece como uma ótima alternativa estável
+  // ROTA AUDIUS (CORRIGIDA)
   servidor.get('/audius/stream/:id', async (requisicao, resposta) => {
-    const { id } = requisicao.params;
-    return resposta.redirect(302, `https://discoveryprovider.audius.co/v1/tracks/${id}/stream?app_name=VIBESOM`);
+    try {
+      const { id } = requisicao.params;
+      const urlAudius = `https://discoveryprovider.audius.co/v1/tracks/${id}/stream?app_name=VIBESOM`;
+      
+      // O erro FST_ERR_BAD_STATUS_CODE ocorre aqui. 
+      // Usar .status(302).redirect() garante que o Fastify entenda o comando.
+      return resposta.status(302).redirect(urlAudius);
+    } catch (erro) {
+      return resposta.status(500).send({ erro: 'Erro interno no Audius' });
+    }
   });
 }
