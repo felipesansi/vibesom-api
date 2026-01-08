@@ -1,4 +1,5 @@
 import axios from 'axios';
+import ytdl from '@distube/ytdl-core';
 
 export default async function rotasTransmissao(servidor) {
 
@@ -44,6 +45,17 @@ export default async function rotasTransmissao(servidor) {
       }
     } catch (e) {
       console.error("Cobalt v10 falhou ou IP bloqueado.");
+    }
+
+    // 3. TENTATIVA COM YTDL-CORE
+    try {
+      const info = await ytdl.getInfo(youtubeUrl);
+      const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+      if (format?.url) {
+        return resposta.status(302).redirect(format.url);
+      }
+    } catch (e) {
+      console.error("ytdl-core falhou:", e.message);
     }
 
     return resposta.status(503).send({ 
