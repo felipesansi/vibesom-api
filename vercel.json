@@ -2,9 +2,8 @@
     "version": 2,
     "functions": {
         "src/server.js": {
-            "runtime": "vercel-node@latest",
             "memory": 1024,
-            "maxDuration": 15
+            "maxDuration": 10
         }
     },
     "rewrites": [
