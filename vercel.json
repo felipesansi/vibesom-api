@@ -1,18 +1,9 @@
 {
     "version": 2,
-    "functions": {
-        "src/server.js": {
-            "memory": 1024,
-            "maxDuration": 10
-        }
-    },
     "rewrites": [
         {
             "source": "/(.*)",
-            "destination": "/src/server.js"
+            "destination": "/api/index.js"
         }
-    ],
-    "env": {
-        "NODE_ENV": "production"
-    }
+    ]
 }
