@@ -1,8 +1,8 @@
 import 'dotenv/config'
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import rotasPesquisa from "../src/routes/search.js";
-import rotasTransmissao from "../src/routes/stream.js";
+import rotasPesquisa from "./src/routes/search.js";
+import rotasTransmissao from "./src/routes/stream.js";
 
 const servidor = Fastify({
   logger: false
