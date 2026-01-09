@@ -11,24 +11,31 @@ export default async function rotasTransmissao(servidor) {
     const shuffle = (array) => array.sort(() => Math.random() - 0.5);
 
     // 1. TENTATIVA COM INVIDIOUS (A mais resiliente no Vercel via local=true)
-    const instanciasInvidious = shuffle([
+    // Priorizamos o Chile (nadeko) por proximidade geográfica ao Brasil
+    const instanciasInvidious = [
+      'https://inv.nadeko.net',
       'https://invidious.nerdvpn.de',
       'https://yewtu.be',
-      'https://inv.nadeko.net',
       'https://invidious.snopyta.org',
       'https://invidious.kavin.rocks',
       'https://inv.tux.pro',
       'https://invidious.drgns.space',
       'https://iv.ggtyler.dev',
       'https://invidious.lunar.icu'
-    ]);
+    ];
 
     for (const inv of instanciasInvidious) {
-       // local=true faz o servidor do Invidious agir como proxy, ocultando o IP da Vercel
-       const proxyUrl = `${inv}/latest_version?id=${idVideo}&itag=140&local=true`;
-       // No Vercel, o melhor é redirecionar direto e deixar o dispositivo do usuário tentar
-       // A checagem previa (HEAD) costuma falhar ou dar timeout
-       return resposta.status(302).redirect(proxyUrl);
+       try {
+         const proxyUrl = `${inv}/latest_version?id=${idVideo}&itag=140&local=true`;
+         
+         // Fazemos um teste rápido de latência (HEAD) para ver se o servidor responde
+         // Se demorar mais de 1.5s, pulamos para o próximo para não travar o app do usuário
+         await axios.head(inv, { timeout: 1500 });
+         
+         return resposta.status(302).redirect(proxyUrl);
+       } catch (e) {
+         continue; // Se a instância estiver offline, tenta a próxima
+       }
     }
 
     // 2. TENTATIVA COM COBALT (Instâncias Comunitárias)
