@@ -9,9 +9,13 @@ export default async function rotasTransmissao(servidor) {
 
     // 1. TENTATIVA COM PIPED (Instâncias que ainda funcionam com Vercel)
     const instanciasPiped = [
-      'https://pipedapi.lunar.icu',
-      'https://api-piped.mha.fi',
-      'https://pipedapi.oxit.uk'
+      'https://api.piped.private.coffee',
+      'https://pipedapi.adminforge.de',
+      'https://pipedapi.leptons.xyz',
+      'https://pipedapi.kavin.rocks',
+      'https://api.piped.yt',
+      'https://pipedapi-libre.kavin.rocks',
+      'https://pipedapi.lunar.icu'
     ];
 
     for (const api of instanciasPiped) {
@@ -22,45 +26,62 @@ export default async function rotasTransmissao(servidor) {
       } catch (e) { continue; }
     }
 
-    // 2. TENTATIVA COM A NOVA API DO COBALT (v10)
-    try {
-      // O Cobalt agora exige headers específicos e mudou o endpoint
-      const cobalt = await axios.post('https://api.cobalt.tools/api/json', {
-        url: youtubeUrl,
-        downloadMode: 'audio',
-        audioFormat: 'mp3'
-      }, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
-        }
-      });
+    // 2. TENTATIVA COM COBALT (Instâncias Comunitárias)
+    const instanciasCobalt = [
+      'https://api.qwkuns.me',
+      'https://cobalt-backend.canine.tools',
+      'https://nuko-c.meowing.de',
+      'https://api.kektube.com',
+      'https://api.cobalt.tools'
+    ];
 
-      // Na v10, a URL pode vir dentro de 'url' ou 'picker'
-      const streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
-      
-      if (streamUrl) {
-        return resposta.status(302).redirect(streamUrl);
-      }
-    } catch (e) {
-      console.error("Cobalt v10 falhou ou IP bloqueado.");
+    for (const api of instanciasCobalt) {
+      try {
+        const cobalt = await axios.post(`${api}/api/json`, {
+          url: youtubeUrl,
+          downloadMode: 'audio',
+          audioFormat: 'mp3'
+        }, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
+          },
+          timeout: 4000
+        });
+
+        const streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
+        if (streamUrl) return resposta.status(302).redirect(streamUrl);
+      } catch (e) { continue; }
     }
 
-    // 3. TENTATIVA COM YTDL-CORE
+    // 3. TENTATIVA COM INVIDIOUS
+    const instanciasInvidious = [
+      'https://invidious.snopyta.org',
+      'https://yewtu.be',
+      'https://invidious.kavin.rocks'
+    ];
+
+    for (const inv of instanciasInvidious) {
+      try {
+        const { data } = await axios.get(`${inv}/api/v1/videos/${idVideo}`, { timeout: 3000 });
+        const format = data.formatStreams.find(s => s.container === 'm4a') || data.adaptiveFormats.find(s => s.type.includes('audio'));
+        if (format?.url) return resposta.status(302).redirect(format.url);
+      } catch (e) { continue; }
+    }
+
+    // 4. ÚLTIMA TENTATIVA COM YTDL-CORE (Geralmente bloqueado no Vercel)
     try {
       const info = await ytdl.getInfo(youtubeUrl);
       const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
-      if (format?.url) {
-        return resposta.status(302).redirect(format.url);
-      }
+      if (format?.url) return resposta.status(302).redirect(format.url);
     } catch (e) {
       console.error("ytdl-core falhou:", e.message);
     }
 
     return resposta.status(503).send({ 
       erro: "Todas as fontes falharam",
-      ajuda: "O Google bloqueou este IP da Vercel. Tente novamente em instantes." 
+      ajuda: "O Google bloqueou este IP da Vercel. Tente novamente em instantes ou utilize a rota do Audius." 
     });
   });
 
