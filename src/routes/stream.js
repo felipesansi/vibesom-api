@@ -37,6 +37,7 @@ export default async function rotasTransmissao(servidor) {
 
     for (const api of instanciasCobalt) {
       try {
+        // Tenta o formato padrão do Cobalt v10
         const cobalt = await axios.post(`${api}/api/json`, {
           url: youtubeUrl,
           downloadMode: 'audio',
@@ -50,9 +51,26 @@ export default async function rotasTransmissao(servidor) {
           timeout: 4000
         });
 
-        const streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
+        // Verifica url ou picker (v10)
+        let streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
+
+        // Fallback para versões mais antigas ou respostas diferentes
+        if (!streamUrl && cobalt.data.status === 'stream') {
+          streamUrl = cobalt.data.url;
+        }
+
         if (streamUrl) return resposta.status(302).redirect(streamUrl);
-      } catch (e) { continue; }
+      } catch (e) { 
+        // Se falhou com /api/json, tenta apenas / se a instância for v10 pura
+        try {
+           const cobaltRoot = await axios.post(`${api}`, {
+             url: youtubeUrl,
+             downloadMode: 'audio'
+           }, { timeout: 3000 });
+           const urlRoot = cobaltRoot.data.url;
+           if (urlRoot) return resposta.status(302).redirect(urlRoot);
+        } catch (err) { continue; }
+      }
     }
 
     // 3. TENTATIVA COM INVIDIOUS
