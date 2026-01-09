@@ -11,9 +11,8 @@ export default async function rotasTransmissao(servidor) {
     const shuffle = (array) => array.sort(() => Math.random() - 0.5);
 
     // 1. TENTATIVA COM INVIDIOUS (A mais resiliente no Vercel via local=true)
-    // Priorizamos o Chile (nadeko) por proximidade geográfica ao Brasil
-    const instanciasInvidious = [
-      'https://inv.nadeko.net',
+    // Removida nadeko temporariamente por instabilidade no servidor de mídia (inv-cl2)
+    const instanciasInvidious = shuffle([
       'https://invidious.nerdvpn.de',
       'https://yewtu.be',
       'https://invidious.snopyta.org',
@@ -22,7 +21,7 @@ export default async function rotasTransmissao(servidor) {
       'https://invidious.drgns.space',
       'https://iv.ggtyler.dev',
       'https://invidious.lunar.icu'
-    ];
+    ]);
 
     for (const inv of instanciasInvidious) {
        try {
