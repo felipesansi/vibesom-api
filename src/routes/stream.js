@@ -7,37 +7,45 @@ export default async function rotasTransmissao(servidor) {
     const { idVideo } = requisicao.params;
     const youtubeUrl = `https://www.youtube.com/watch?v=${idVideo}`;
 
-    // 1. TENTATIVA COM PIPED (Instâncias que ainda funcionam com Vercel)
-    const instanciasPiped = [
-      'https://api.piped.private.coffee',
-      'https://pipedapi.adminforge.de',
-      'https://pipedapi.leptons.xyz',
-      'https://pipedapi.kavin.rocks',
-      'https://api.piped.yt',
-      'https://pipedapi-libre.kavin.rocks',
-      'https://pipedapi.lunar.icu'
-    ];
+    // Função para embaralhar arrays
+    const shuffle = (array) => array.sort(() => Math.random() - 0.5);
 
-    for (const api of instanciasPiped) {
+    // 1. TENTATIVA COM INVIDIOUS PROXY (Mais chance de funcionar para o usuário final)
+    const instanciasInvidious = shuffle([
+      'https://invidious.nerdvpn.de',
+      'https://yewtu.be',
+      'https://inv.nadeko.net',
+      'https://invidious.snopyta.org',
+      'https://invidious.kavin.rocks',
+      'https://inv.tux.pro',
+      'https://invidious.drgns.space'
+    ]);
+
+    for (const inv of instanciasInvidious) {
       try {
-        const res = await axios.get(`${api}/streams/${idVideo}`, { timeout: 3000 });
-        const stream = res.data.audioStreams.find(s => s.format === 'M4A') || res.data.audioStreams[0];
-        if (stream?.url) return resposta.status(302).redirect(stream.url);
+        // O padrão 'latest_version' com 'local=true' força o Invidious a fazer proxy do áudio
+        // Isso evita o erro de IP bloqueado (403) no dispositivo do usuário
+        const proxyUrl = `${inv}/latest_version?id=${idVideo}&itag=140&local=true`;
+        
+        // Fazemos um pequeno head para ver se a instância está viva
+        const check = await axios.head(proxyUrl, { timeout: 2500, validateStatus: false });
+        if (check.status === 302 || check.status === 200) {
+           return resposta.status(302).redirect(proxyUrl);
+        }
       } catch (e) { continue; }
     }
 
     // 2. TENTATIVA COM COBALT (Instâncias Comunitárias)
-    const instanciasCobalt = [
+    const instanciasCobalt = shuffle([
       'https://api.qwkuns.me',
       'https://cobalt-backend.canine.tools',
       'https://nuko-c.meowing.de',
       'https://api.kektube.com',
       'https://api.cobalt.tools'
-    ];
+    ]);
 
     for (const api of instanciasCobalt) {
       try {
-        // Tenta o formato padrão do Cobalt v10
         const cobalt = await axios.post(`${api}/api/json`, {
           url: youtubeUrl,
           downloadMode: 'audio',
@@ -51,44 +59,37 @@ export default async function rotasTransmissao(servidor) {
           timeout: 4000
         });
 
-        // Verifica url ou picker (v10)
         let streamUrl = cobalt.data.url || cobalt.data.picker?.[0]?.url;
-
-        // Fallback para versões mais antigas ou respostas diferentes
-        if (!streamUrl && cobalt.data.status === 'stream') {
-          streamUrl = cobalt.data.url;
-        }
-
+        if (!streamUrl && cobalt.data.status === 'stream') streamUrl = cobalt.data.url;
         if (streamUrl) return resposta.status(302).redirect(streamUrl);
       } catch (e) { 
-        // Se falhou com /api/json, tenta apenas / se a instância for v10 pura
         try {
-           const cobaltRoot = await axios.post(`${api}`, {
-             url: youtubeUrl,
-             downloadMode: 'audio'
-           }, { timeout: 3000 });
-           const urlRoot = cobaltRoot.data.url;
-           if (urlRoot) return resposta.status(302).redirect(urlRoot);
+           const cobaltRoot = await axios.post(`${api}`, { url: youtubeUrl, downloadMode: 'audio' }, { timeout: 3000 });
+           if (cobaltRoot.data.url) return resposta.status(302).redirect(cobaltRoot.data.url);
         } catch (err) { continue; }
       }
     }
 
-    // 3. TENTATIVA COM INVIDIOUS
-    const instanciasInvidious = [
-      'https://invidious.snopyta.org',
-      'https://yewtu.be',
-      'https://invidious.kavin.rocks'
-    ];
+    // 3. TENTATIVA COM PIPED
+    const instanciasPiped = shuffle([
+      'https://api.piped.private.coffee',
+      'https://pipedapi.adminforge.de',
+      'https://pipedapi.leptons.xyz',
+      'https://pipedapi.kavin.rocks',
+      'https://api.piped.yt',
+      'https://pipedapi-libre.kavin.rocks',
+      'https://pipedapi.lunar.icu'
+    ]);
 
-    for (const inv of instanciasInvidious) {
+    for (const api of instanciasPiped) {
       try {
-        const { data } = await axios.get(`${inv}/api/v1/videos/${idVideo}`, { timeout: 3000 });
-        const format = data.formatStreams.find(s => s.container === 'm4a') || data.adaptiveFormats.find(s => s.type.includes('audio'));
-        if (format?.url) return resposta.status(302).redirect(format.url);
+        const res = await axios.get(`${api}/streams/${idVideo}`, { timeout: 3000 });
+        const stream = res.data.audioStreams.find(s => s.format === 'M4A') || res.data.audioStreams[0];
+        if (stream?.url) return resposta.status(302).redirect(stream.url);
       } catch (e) { continue; }
     }
 
-    // 4. ÚLTIMA TENTATIVA COM YTDL-CORE (Geralmente bloqueado no Vercel)
+    // 4. ÚLTIMA TENTATIVA COM YTDL-CORE
     try {
       const info = await ytdl.getInfo(youtubeUrl);
       const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
@@ -99,7 +100,7 @@ export default async function rotasTransmissao(servidor) {
 
     return resposta.status(503).send({ 
       erro: "Todas as fontes falharam",
-      ajuda: "O Google bloqueou este IP da Vercel. Tente novamente em instantes ou utilize a rota do Audius." 
+      ajuda: "O Google detectou tráfego automatizado. Tente novamente em 10 segundos ou use a rota Audius." 
     });
   });
 
