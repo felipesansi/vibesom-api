@@ -25,17 +25,9 @@ export default async function rotasTransmissao(servidor) {
     ];
 
     for (const inv of instanciasInvidious) {
-       try {
-         const proxyUrl = `${inv}/latest_version?id=${idVideo}&itag=140&local=true`;
-         
-         // Fazemos um teste rápido de latência (HEAD) para ver se o servidor responde
-         // Se demorar mais de 1.5s, pulamos para o próximo para não travar o app do usuário
-         await axios.head(inv, { timeout: 1500 });
-         
-         return resposta.status(302).redirect(proxyUrl);
-       } catch (e) {
-         continue; // Se a instância estiver offline, tenta a próxima
-       }
+       // Redirecionamento direto para o proxy Invidious para latência zero na API
+       const proxyUrl = `${inv}/latest_version?id=${idVideo}&itag=140&local=true`;
+       return resposta.status(302).redirect(proxyUrl);
     }
 
     // 2. TENTATIVA COM COBALT (Instâncias Comunitárias)
