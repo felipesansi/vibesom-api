@@ -55,7 +55,7 @@ servidor.register(swagger, {
 })
 
 servidor.register(swaggerUi, {
-  routePrefix: '/documentacao',
+  routePrefix: '/docs',
   uiConfig: {
     docExpansion: 'full',
     deepLinking: false
