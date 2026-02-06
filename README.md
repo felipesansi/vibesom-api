@@ -17,7 +17,7 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 - 🎵 **Streaming Direto**: URLs de streaming para todas as músicas encontradas
 - 📚 **Documentação Completa**: Interface Swagger interativa
 - 🌐 **CORS Habilitado**: Compatível com aplicações web e mobile
-- 🇧🇷 **100% em Português**: Interface e documentação localizadas
+  
 - ⚡ **Alta Performance**: Respostas rápidas e confiáveis
 
 ## 🎯 Plataformas Suportadas
@@ -77,7 +77,7 @@ curl "https://vibesom-api-c7re.vercel.app/audius/stream/D7A7y"
 
 ### 📚 Documentação Interativa
 Acesse a documentação completa no Swagger UI:
-- **URL**: [https://vibesom-api-c7re.vercel.app/documentacao](https://vibesom-api-c7re.vercel.app/documentacao)
+- **URL**: [https://vibesom-api-c7re.vercel.app/docs](https://vibesom-api-c7re.vercel.app/docs)
 - **Formato**: OpenAPI 3.0
 - **Recursos**: Teste em tempo real, exemplos, schemas
 
@@ -208,27 +208,8 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 **Felipe Sansi**
 - GitHub: [@felipesansi](https://github.com/felipesansi)
-- LinkedIn: [Seu LinkedIn]
+- LinkedIn: [felipesanso](https://LinkedIn.com/felipesansi)
 
-## 🙏 Agradecimentos
 
-- Plataformas musicais por fornecerem APIs públicas
-- Comunidade open source pelas bibliotecas utilizadas
-- Vercel pela hospedagem gratuita e confiável
 
-## 📞 Suporte
 
-Para suporte ou dúvidas:
-- Abra uma [issue](https://github.com/felipesansi/vibesom-api/issues) no GitHub
-- Consulte a [documentação completa](https://vibesom-api-c7re.vercel.app/documentacao)
-
----
-
-<div align="center">
-
-**🎵 Desenvolvido com ❤️ para a comunidade musical**
-
-[![GitHub stars](https://img.shields.io/github/stars/felipesansi/vibesom-api?style=social)](https://github.com/felipesansi/vibesom-api/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/felipesansi/vibesom-api?style=social)](https://github.com/felipesansi/vibesom-api/network/members)
-
-</div>
