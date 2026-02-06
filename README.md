@@ -208,7 +208,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 **Felipe Sansi**
 - GitHub: [@felipesansi](https://github.com/felipesansi)
-- LinkedIn: [felipesanso](https://LinkedIn.com/felipesansi)
+- LinkedIn: [felipesansi](https://LinkedIn.com/felipesansi)
 
 
 
