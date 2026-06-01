@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test:ia": "node scripts/testar-ia.mjs",
+    "test:gemini": "node scripts/probar-gemini.mjs"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

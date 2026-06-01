@@ -1,5 +1,6 @@
 import axios from 'axios';
 import ytdl from '@distube/ytdl-core';
+import { escolherMelhorIndice } from '../lib/iaEscolher.js';
 
 // ==========================================================
 // HELPERS
@@ -106,42 +107,59 @@ export default async function rotasTransmissao(servidor) {
 
         console.log(`[FALLBACK] Buscando áudio para: ${tituloLimpo}`);
 
-        // 1. TENTA SOUNDCLOUD (Proxy Interno)
         const cid = await obterIdSoundCloud();
-        const buscaSc = await axios.get(`https://api-v2.soundcloud.com/search/tracks`, {
-            params: { q: tituloLimpo, client_id: cid, limit: 1 }
-        });
-
-        if (buscaSc.data.collection?.[0]) {
-            const idSc = buscaSc.data.collection[0].id;
-            console.log(`[FALLBACK] Encontrado no SoundCloud: ${idSc}`);
-            return resposta.redirect(`/soundcloud/stream/${idSc}`);
-        }
-
-        // 2. TENTA AUDIUS (Proxy Interno)
-        const buscaAudius = await axios.get(`https://discoveryprovider.audius.co/v1/tracks/search`, {
+        const [buscaSc, buscaAudius, buscaSaavn] = await Promise.all([
+          axios.get(`https://api-v2.soundcloud.com/search/tracks`, {
+            params: { q: tituloLimpo, client_id: cid, limit: 5 }
+          }).catch(() => ({ data: { collection: [] } })),
+          axios.get(`https://discoveryprovider.audius.co/v1/tracks/search`, {
             params: { query: tituloLimpo, app_name: 'VIBESOM' }
-        });
+          }).catch(() => ({ data: { data: [] } })),
+          axios.get(`https://saavn.me/search/songs`, {
+            params: { query: tituloLimpo, limit: 5 }
+          }).catch(() => ({ data: { data: { results: [] } } }))
+        ]);
 
-        if (buscaAudius.data.data?.[0]) {
-            const idAudius = buscaAudius.data.data[0].id;
-            console.log(`[FALLBACK] Encontrado no Audius: ${idAudius}`);
-            return resposta.redirect(`/audius/stream/${idAudius}`);
+        const candidatos = [];
+
+        for (const faixa of buscaSc.data.collection || []) {
+          candidatos.push({
+            source: 'SoundCloud',
+            titulo: faixa.title,
+            artista: faixa.user?.username,
+            redirect: `/soundcloud/stream/${faixa.id}`
+          });
         }
 
-        // 3. TENTA SAAVN (Proxy Interno)
-        const buscaSaavn = await axios.get(`https://saavn.me/search/songs`, {
-            params: { query: tituloLimpo, limit: 1 }
-        });
+        for (const faixa of (buscaAudius.data.data || []).slice(0, 5)) {
+          candidatos.push({
+            source: 'Audius',
+            titulo: faixa.title,
+            artista: faixa.user?.name,
+            redirect: `/audius/stream/${faixa.id}`
+          });
+        }
 
-        if (buscaSaavn.data.data?.results?.[0]) {
-            const musicaSaavn = buscaSaavn.data.data.results[0];
-            const urlDownload = musicaSaavn.downloadUrl?.find(q => q.quality === '320kbps')?.link || 
-                                musicaSaavn.downloadUrl?.[musicaSaavn.downloadUrl.length - 1]?.link;
-            if (urlDownload) {
-                console.log(`[FALLBACK] Encontrado no Saavn: ${musicaSaavn.id}`);
-                return resposta.redirect(`/saavn/stream?url=${encodeURIComponent(urlDownload)}`);
-            }
+        for (const faixa of buscaSaavn.data.data?.results || []) {
+          const urlDownload =
+            faixa.downloadUrl?.find((q) => q.quality === '320kbps')?.link ||
+            faixa.downloadUrl?.[faixa.downloadUrl.length - 1]?.link;
+          if (!urlDownload) continue;
+          candidatos.push({
+            source: 'Saavn',
+            titulo: faixa.name,
+            artista: faixa.primaryArtists,
+            redirect: `/saavn/stream?url=${encodeURIComponent(urlDownload)}`
+          });
+        }
+
+        if (candidatos.length > 0) {
+          const indice = await escolherMelhorIndice(tituloLimpo, candidatos);
+          const escolhido = candidatos[indice];
+          console.log(
+            `[FALLBACK] IA escolheu ${escolhido.source}: ${escolhido.titulo} — ${escolhido.artista}`
+          );
+          return resposta.redirect(escolhido.redirect);
         }
 
         return resposta.status(404).send({ 

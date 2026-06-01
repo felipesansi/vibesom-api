@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ordenarPorRelevancia } from '../lib/iaEscolher.js';
 
 // ============================================================================
 // CONFIGURAÇÕES E HELPERS
@@ -250,8 +251,8 @@ export default async function rotasPesquisa(servidor) {
             return resposta.status(404).send({ erro: 'Nada encontrado.' });
         }
 
-        // Mistura os resultados
-        return resposta.send(unificados.sort(() => Math.random() - 0.5));
+        const ordenados = await ordenarPorRelevancia(termo, unificados);
+        return resposta.send(ordenados);
 
     } catch (erro) {
         return resposta.status(500).send({ erro: 'Erro fatal na busca' });
