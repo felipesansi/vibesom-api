@@ -56,15 +56,15 @@ export default async function rotasHearThis(servidor) {
 
       const musicas = data.map(musica => ({
         source: 'HearThis',
-        id: track.id,
-        titulo: track.title,
-        artista: track.user?.username,
-        capa: track.artwork_url || track.thumb,
-        duracao: track.duration,
-        plays: track.playback_count,
-        genero: track.genre,
+        id: musica.id,
+        titulo: musica.title,
+        artista: musica.user?.username,
+        capa: musica.artwork_url || musica.thumb,
+        duracao: musica.duration,
+        plays: musica.playback_count,
+        genero: musica.genre,
         // Usando proxy para evitar download forçado
-        streamUrl: `/hearthis/stream?url=${encodeURIComponent(track.stream_url)}`
+        streamUrl: `/hearthis/stream?url=${encodeURIComponent(musica.stream_url)}`
       }));
 
       return resposta.status(200).send(musicas);

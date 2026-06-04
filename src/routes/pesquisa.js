@@ -244,8 +244,8 @@ export default async function rotasPesquisa(servidor) {
 
     // EXECUÇÃO EM PARALELO
     try {
-        const resultados = await Promise.all(promessas);
-        const unificados = resultados.flat();
+        const resultados = await Promise.allSettled(promessas);
+        const unificados = resultados.filter(r => r.status === 'fulfilled').map(r => r.value).flat();
 
         if (unificados.length === 0) {
             return resposta.status(404).send({ erro: 'Nada encontrado.' });

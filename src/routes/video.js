@@ -69,7 +69,7 @@ export default async function rotasVideo(servidor) {
             const { data } = await axios.post(`${api}/api/json`, {
                 url: `https://www.youtube.com/watch?v=${id}`,
                 vCodec: 'h264', // Garante MP4 compatível
-                vQuality: quality.replace('p', ''),
+                vQuality: qualidade.replace('p', ''),
                 aFormat: 'mp3',
                 isAudioOnly: false
             }, { 

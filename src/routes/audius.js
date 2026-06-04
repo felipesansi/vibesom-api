@@ -297,7 +297,7 @@ export default async function rotasAudius(servidor) {
       if (!data.data || data.data.length === 0) {
         return resposta.status(404).send({ 
           erro: 'Nenhum artista encontrado',
-          query: query
+          query: consulta
         });
       }
 
