@@ -88,6 +88,12 @@ export default async function rotasTransmissao(servidor) {
       throw new Error('Formato YouTube não encontrado');
 
     } catch (erro) {
+      // Identifica se o erro é o famoso 403 (IP bloqueado pelo YouTube no servidor)
+      const isBlocked = erro.message?.includes('403') || erro.statusCode === 403;
+      if (isBlocked) {
+        console.warn(`[STREAM] YouTube bloqueou a requisição (403) para ${idVideo}.`);
+      }
+
       console.log(`[STREAM] Falha no ytdl para ${idVideo}, tentando fallback...`);
       
       // FALLBACK: BUSCA NO SOUNDCLOUD, AUDIUS OU SAAVN PELO TÍTULO

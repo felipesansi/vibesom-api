@@ -18,7 +18,8 @@ import rotasSaavn from './src/routes/saavn.js';
 import rotasPalco from './src/routes/palco.js';
 
 const servidor = Fastify({
-  logger: false
+  logger: false,
+  trustProxy: true
 })
 
 // Configuração do Swagger
@@ -32,8 +33,8 @@ servidor.register(swagger, {
     },
     servers: [
       {
-        url: 'https://vibesom-api-c7re.vercel.app',
-        description: 'Servidor de produção'
+        url: '/',
+        description: 'Servidor atual'
       }
     ],
     tags: [
