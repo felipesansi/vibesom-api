@@ -1,6 +1,6 @@
 # 🎵 VibeSom API
 
-[![API Status](https://img.shields.io/badge/Status-Online-green)](https://vibesom-api-c7re.vercel.app)
+[![API Status](https://img.shields.io/badge/Status-Online-green)](https://vibesom-api.vercel.app)
 [![Version](https://img.shields.io/badge/Version-1.0.0-blue)](https://github.com/felipesansi/vibesom-api)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
@@ -40,7 +40,7 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 
 ### Status da API
 ```bash
-curl https://vibesom-api-c7re.vercel.app/
+curl https://vibesom-api.vercel.app/
 # {"status":"VibeSom API Online","versao":"1.0.0"}
 ```
 
@@ -209,7 +209,3 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 **Felipe Sansi**
 - GitHub: [@felipesansi](https://github.com/felipesansi)
 - LinkedIn: [felipesansi](https://LinkedIn.com/felipesansi)
-
-
-
-
