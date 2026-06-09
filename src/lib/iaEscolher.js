@@ -18,10 +18,10 @@ const URL_OPENAI = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 const MODELO_OPENAI = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const INSTRUCAO_SISTEMA =
-  'Você escolhe músicas que melhor correspondem ao pedido do usuário. Prefira versões originais oficiais, não remixes. Responda apenas JSON válido, sem markdown.';
+  'Você é um especialista em curadoria musical. Sua tarefa é identificar a melhor correspondência para uma busca, priorizando versões originais, oficiais e de estúdio. Evite remixes, covers ou versões ao vivo, a menos que explicitamente solicitado. Responda estritamente em JSON.';
 
 const RUIDO_TITULO =
-  /\b(remix|mashup|flip|cover|karaoke|8d|slowed|reverb|extended mix|nonstop|full album)\b/i;
+  /\b(remix|mashup|flip|cover|karaoke|8d|slowed|reverb|extended mix|nonstop|full album|live|ao vivo|instrumental|parody|tribute|sped up|nightcore|loop|reverb)\b/i;
 
 function modelosGemini() {
   const lista = (
@@ -73,8 +73,11 @@ function pontuarRelevancia(contexto, opcao) {
   let pontos = (noTitulo / palavras.length) * 0.75 + (noArtista / palavras.length) * 0.25;
 
   if (palavras.every((p) => titulo.includes(p))) pontos += 0.45;
-  if (titulo === alvo) pontos += 0.55;
+  if (titulo === alvo) pontos += 0.65;
   else if (titulo.includes(alvo) || alvo.includes(titulo)) pontos += 0.3;
+
+  // Bônus se o artista for mencionado no contexto e bater com a opção
+  if (artista && (alvo.includes(artista) || artista.includes(alvo))) pontos += 0.25;
 
   if (RUIDO_TITULO.test(rotulo) && !RUIDO_TITULO.test(contexto)) pontos -= 0.3;
 
@@ -105,7 +108,7 @@ async function chamarGeminiModelo(modelo, prompt, timeout) {
   const { data } = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
     {
-      systemInstruction: { parts: [{ text: INSTRUCAO_SISTEMA }] },
+      systemInstruction: { parts: [{ text: INSTRUCAO_SISTEMA + ' Não inclua markdown na resposta.' }] },
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0,
@@ -196,16 +199,28 @@ export async function escolherMelhorIndice(contexto, opcoes, { timeout = 5000 } 
   if (!opcoes?.length) return 0;
   if (opcoes.length === 1) return 0;
 
-  if (!temProvedorIA()) {
-    return melhorIndiceHeuristico(contexto, opcoes);
+  // Calcula melhor opção heurística e sua pontuação
+  let melhorHeuristico = 0;
+  let maiorPontuacao = -1;
+  opcoes.forEach((op, i) => {
+    const p = pontuarRelevancia(contexto, op);
+    if (p > maiorPontuacao) {
+      maiorPontuacao = p;
+      melhorHeuristico = i;
+    }
+  });
+
+  // Se a confiança for muito alta (match exato de título/artista), pula a IA
+  if (maiorPontuacao >= 1.5 || !temProvedorIA()) {
+    return melhorHeuristico;
   }
 
   try {
     const lista = opcoes.map((op, i) => ({ i, rotulo: rotuloOpcao(op) }));
     const { indice } = await chamarModelo(
       `Contexto: "${contexto}"
-Opções: ${JSON.stringify(lista)}
-Qual índice "i" é a melhor correspondência musical (versão original preferida)? Responda: {"indice": number}`,
+Opções (ID e Rótulo): ${JSON.stringify(lista)}
+Qual o índice "i" da opção que melhor corresponde ao contexto musical? Priorize faixas originais. Responda: {"indice": number}`,
       timeout
     );
 
@@ -216,7 +231,7 @@ Qual índice "i" é a melhor correspondência musical (versão original preferid
     console.warn('[IA] escolherMelhorIndice:', erro.message);
   }
 
-  return melhorIndiceHeuristico(contexto, opcoes);
+  return melhorHeuristico;
 }
 
 /**
@@ -245,8 +260,8 @@ export async function ordenarPorRelevancia(
 
     const { ordem } = await chamarModelo(
       `Termo de busca: "${contexto}"
-Músicas: ${JSON.stringify(lista)}
-Ordene do mais relevante ao menos. Prefira faixas originais (evite remix/mashup se o usuário não pediu). Use cada índice "i" no máximo uma vez.
+Lista de faixas: ${JSON.stringify(lista)}
+Ordene os índices "i" do mais relevante para o menos relevante em relação ao termo de busca. Priorize versões oficiais.
 Responda: {"ordem": [number, ...]}`,
       timeout
     );

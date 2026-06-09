@@ -9,6 +9,14 @@ import { escolherMelhorIndice } from '../lib/iaEscolher.js';
 let idSoundCloud = null;
 let ultimaAtualizacaoChave = 0;
 
+const INSTANCIAS_PIPED = [
+  'https://api.piped.private.coffee',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.kavin.rocks',
+  'https://api.piped.yt'
+];
+
 async function obterIdSoundCloud() {
   if (idSoundCloud && Date.now() - ultimaAtualizacaoChave < 3600000) return idSoundCloud;
   try {
@@ -81,31 +89,72 @@ export default async function rotasTransmissao(servidor) {
         filter: 'audioonly' 
       });
 
-      if (formato && formato.url) {
-        return resposta.redirect(formato.url);
+      if (!formato || !formato.url) {
+        throw new Error('Formato YouTube não encontrado');
       }
       
-      throw new Error('Formato YouTube não encontrado');
+      // Em vez de redirecionar, fazemos um proxy do stream diretamente pelo servidor
+      resposta.header('Content-Type', formato.mimeType || 'audio/mpeg');
+      resposta.header('Content-Disposition', 'inline');
+
+      if (formato.contentLength) {
+        resposta.header('Content-Length', formato.contentLength);
+      }
+
+      const youtubeStream = ytdl(idVideo, { format: formato });
+
+      youtubeStream.on('error', (streamErr) => {
+        console.error(`[STREAM] Erro no stream do ytdl para ${idVideo}:`, streamErr.message);
+        if (!resposta.headersSent) {
+          return resposta.status(500).send({ 
+            erro: 'Erro ao transmitir áudio do YouTube',
+            detalhes: streamErr.message
+          });
+        }
+      });
+
+      return youtubeStream.pipe(resposta);
 
     } catch (erro) {
       // Identifica se o erro é o famoso 403 (IP bloqueado pelo YouTube no servidor)
-      const isBlocked = erro.message?.includes('403') || erro.statusCode === 403;
-      if (isBlocked) {
-        console.warn(`[STREAM] YouTube bloqueou a requisição (403) para ${idVideo}.`);
-      }
+      console.warn(`[STREAM] ytdl falhou para ${idVideo} (Vercel IP?). Tentando Piped...`);
 
-      console.log(`[STREAM] Falha no ytdl para ${idVideo}, tentando fallback...`);
+      // TENTATIVA ALTERNATIVA: Buscar stream via Piped (Bypass de 403)
+      for (const instancia of INSTANCIAS_PIPED) {
+        try {
+          const { data } = await axios.get(`${instancia}/streams/${idVideo}`, { timeout: 4000 });
+          const audioStream = data.audioStreams?.find(s => s.format === 'MPEG_4' || s.format === 'WEB_M_OPUS') || data.audioStreams?.[0];
+
+          if (audioStream && audioStream.url) {
+            console.log(`[STREAM] Sucesso via Piped (${instancia})`);
+            
+            const { data: fluxo, headers } = await axios({
+              method: 'get',
+              url: audioStream.url,
+              responseType: 'stream',
+              timeout: 10000
+            });
+
+            resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
+            resposta.header('Content-Disposition', 'inline');
+            if (headers['content-length']) resposta.header('Content-Length', headers['content-length']);
+
+            return resposta.send(fluxo);
+          }
+        } catch (e) {
+          continue; // Tenta a próxima instância
+        }
+      }
       
-      // FALLBACK: BUSCA NO SOUNDCLOUD, AUDIUS OU SAAVN PELO TÍTULO
+      // FALLBACK FINAL: BUSCA EM OUTRAS PLATAFORMAS SE O YOUTUBE ESTIVER TOTALMENTE BLOQUEADO
       try {
-        // Se ainda não temos o título (erro no ytdl.getInfo), tenta via oEmbed
         if (tituloVideo === 'Música') {
             const infoVideo = await axios.get(`https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v=${idVideo}&format=json`);
             tituloVideo = infoVideo.data.title;
         }
 
         const tituloLimpo = tituloVideo
-            .replace(/\(Official.*\)/gi, '')
+            .replace(/\(Official.*?\)/gi, '')
             .replace(/\[Official.*\]/gi, '')
             .replace(/Video Clipe/gi, '')
             .replace(/Clipe Oficial/gi, '')
