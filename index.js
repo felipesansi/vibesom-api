@@ -40,6 +40,7 @@ servidor.register(swagger, {
     tags: [
       { name: 'Geral', description: 'Rotas gerais da API' },
       { name: 'Busca', description: 'Rotas de busca de músicas' },
+      { name: 'Artista', description: 'Busca de perfis e discografias completas' },
       { name: 'Streaming', description: 'Rotas de streaming de músicas' },
       { name: 'SoundCloud', description: 'Rotas específicas do SoundCloud' },
       { name: 'Audius', description: 'Rotas específicas do Audius' },

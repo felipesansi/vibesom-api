@@ -15,6 +15,9 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 
 - 🔍 **Busca Unificada**: Pesquisa em todas as plataformas simultaneamente
 - 🎵 **Streaming Direto**: URLs de streaming para todas as músicas encontradas
+- 🤖 **Ordenação por IA**: Resultados ranqueados por relevância usando Gemini ou OpenAI
+- 👨‍🎤 **Busca de Artistas**: Encontre perfis unificados de múltiplas fontes (Audius, SoundCloud, etc.)
+- 💿 **Discografia Agregada**: Obtenha todas as músicas de um artista de forma simplificada
 - 📚 **Documentação Completa**: Interface Swagger interativa
 - 🌐 **CORS Habilitado**: Compatível com aplicações web e mobile
   
@@ -37,6 +40,20 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 | **YouTube** | ❌ | 🔄 | Apenas metadados (Streaming via Fallback) |
 
 ## 🚀 Quick Start
+
+### Configuração de Ambiente
+Crie um arquivo `.env` na raiz do projeto com as seguintes chaves para habilitar a busca inteligente:
+```env
+PORT=3333
+
+# Provedores de IA (Pelo menos um é recomendado para melhor relevância)
+GEMINI_API_KEY=sua_chave_google_aqui
+OPENAI_API_KEY=sua_chave_openai_aqui
+
+# Opcional: Modelos específicos
+GEMINI_MODELS=gemini-2.0-flash,gemini-1.5-flash
+OPENAI_MODEL=gpt-4o-mini
+```
 
 ### Status da API
 ```bash
@@ -85,6 +102,8 @@ Acesse a documentação completa no Swagger UI:
 
 #### Busca
 - `GET /pesquisa?termo={termo}` - Busca geral em todas as plataformas
+- `GET /pesquisa/artista?termo={termo}` - Busca perfis de artistas em múltiplas fontes
+- `GET /pesquisa/discografia?artista={nome}` - Retorna a discografia completa de um artista
 - `GET /{plataforma}/search/{consulta}` - Busca específica por plataforma
 
 #### Streaming

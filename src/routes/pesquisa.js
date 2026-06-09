@@ -16,11 +16,6 @@ const INSTANCIAS_PIPED = [
   'https://api.piped.yt'
 ];
 
-// Helper para scraping de ID de Cliente do SoundCloud (simplificado)
-async function obterIdSoundCloud() {
-    return 'LBCcHmRB8XSStWL6wKH2HPACspQlXg2P'; // Fallback rápido
-}
-
 export default async function rotasPesquisa(servidor) {
   
   servidor.get('/pesquisa', {
@@ -94,7 +89,8 @@ export default async function rotasPesquisa(servidor) {
     // AUDIUS
     promessas.push((async () => {
         try {
-            const { data } = await axios.get(`https://discoveryprovider.audius.co/v1/tracks/search`, {
+            const host = await obterServidorAtivoAudius();
+            const { data } = await axios.get(`${host}/v1/tracks/search`, {
                 params: { query: termo, app_name: 'VIBESOM' },
                 timeout: 4000
             });
