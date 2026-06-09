@@ -34,7 +34,7 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 | **Bandcamp** | ✅ | ✅ | - |
 | **Palco MP3** | ✅ | ✅ | - |
 | **Saavn** | ✅ | ✅ | - |
-| **YouTube** | ❌ | ✅ | Download de Vídeo |
+| **YouTube** | ❌ | 🔄 | Apenas metadados (Streaming via Fallback) |
 
 ## 🚀 Quick Start
 
