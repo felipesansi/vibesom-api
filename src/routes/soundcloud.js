@@ -11,7 +11,7 @@ const IDS_BACKUP = [
   'Nb28sn2a2s211d12d212d212d212d212'
 ];
 
-async function obterIdCliente() {
+export async function obterIdCliente() {
   if (idCliente && Date.now() - ultimaBuscaChave < 1000 * 60 * 60) return idCliente;
 
   try {

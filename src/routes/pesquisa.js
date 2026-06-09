@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { ordenarPorRelevancia } from '../lib/iaEscolher.js';
 
+import { obterServidorAtivo as obterServidorAtivoAudius } from './audius.js';
+import { obterIdCliente as obterIdClienteSoundCloud } from './soundcloud.js';
 // ============================================================================
 // CONFIGURAÇÕES E HELPERS
 // ============================================================================
@@ -69,7 +71,7 @@ export default async function rotasPesquisa(servidor) {
     // SoundCloud
     const buscaSoundCloud = (async () => {
         try {
-            const cid = await obterIdSoundCloud();
+            const cid = await obterIdClienteSoundCloud();
             
             const { data } = await axios.get(`https://api-v2.soundcloud.com/search/tracks`, {
                 params: { q: termo, client_id: cid, limit: 15 },

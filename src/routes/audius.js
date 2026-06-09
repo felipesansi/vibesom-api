@@ -8,7 +8,7 @@ const AUDIUS_DISCOVERY_NODES = [
   'https://audius-dp.delhi.creatorseed.com'
 ];
 
-const obterServidorAtivo = async () => {
+export const obterServidorAtivo = async () => {
   for (const host of AUDIUS_DISCOVERY_NODES) {
     try {
       await axios.get(`${host}/health_check`, { timeout: 2000 });
