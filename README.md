@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 pinned: false
 license: mit
-short_description: API para busca e streaming de músicas de múltiplas plataformas
+short_description: API de busca e streaming de músicas
 ---
 
 # 🎵 VibeSom API
