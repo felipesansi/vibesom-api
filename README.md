@@ -1,3 +1,14 @@
+---
+title: Vibesom Api
+emoji: 🎵
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+license: mit
+short_description: API para busca e streaming de músicas de múltiplas plataformas
+---
+
 # 🎵 VibeSom API
 
 [![API Status](https://img.shields.io/badge/Status-Online-green)](https://vibesom-api.vercel.app)
