@@ -16,6 +16,7 @@ import rotasDailymotion from './src/routes/dailymotion.js';
 import rotasVideo from './src/routes/video.js';
 import rotasSaavn from './src/routes/saavn.js';
 import rotasPalco from './src/routes/palco.js';
+import rotasYoutube from './src/routes/youtube.js';
 
 const servidor = Fastify({
   logger: false,
@@ -51,7 +52,8 @@ servidor.register(swagger, {
       { name: 'Dailymotion', description: 'Rotas específicas do Dailymotion' },
       { name: 'Bandcamp', description: 'Rotas específicas do Bandcamp' },
       { name: 'Palco MP3', description: 'Rotas específicas do Palco MP3' },
-      { name: 'Saavn', description: 'Rotas específicas do Saavn' }
+      { name: 'Saavn', description: 'Rotas específicas do Saavn' },
+      { name: 'YouTube', description: 'Busca e stream direto do YouTube (sem Spotify)' }
     ]
   }
 })
@@ -104,6 +106,7 @@ servidor.register(rotasDailymotion)
 servidor.register(rotasVideo)
 servidor.register(rotasSaavn)
 servidor.register(rotasPalco)
+servidor.register(rotasYoutube)
 
 // Para rodar localmente ou em serviços como Render/Railway
 const porta = process.env.PORT || 3333;
