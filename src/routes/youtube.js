@@ -66,17 +66,49 @@ export default async function rotasYoutube(servidor) {
       },
       response: {
         200: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              source:    { type: 'string' },
-              id:        { type: 'string' },
-              titulo:    { type: 'string' },
-              artista:   { type: 'string' },
-              capa:      { type: 'string' },
-              duracao:   { type: 'number' },
-              streamUrl: { type: 'string' }
+          type: 'object',
+          properties: {
+            artistas: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  source:    { type: 'string' },
+                  id:        { type: 'string' },
+                  nome:      { type: 'string' },
+                  capa:      { type: 'string' },
+                  inscritos: { type: 'string' }
+                }
+              }
+            },
+            musicas: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  source:    { type: 'string' },
+                  id:        { type: 'string' },
+                  titulo:    { type: 'string' },
+                  artista:   { type: 'string' },
+                  capa:      { type: 'string' },
+                  duracao:   { type: 'number' },
+                  streamUrl: { type: 'string' }
+                }
+              }
+            },
+            playlists: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  source:    { type: 'string' },
+                  id:        { type: 'string' },
+                  titulo:    { type: 'string' },
+                  artista:   { type: 'string' },
+                  capa:      { type: 'string' },
+                  quantidade:{ type: 'number' }
+                }
+              }
             }
           }
         },
@@ -92,13 +124,16 @@ export default async function rotasYoutube(servidor) {
       console.log(`[YT BUSCA] "${termo}"`);
 
       const resultado = await yts({ query: `${termo} music`, pages: 1 });
-      const videos = resultado.videos.slice(0, Number(limite));
 
-      if (videos.length === 0) {
-        return resposta.status(404).send({ erro: 'Nenhum resultado encontrado no YouTube.' });
-      }
+      const artistas = (resultado.channels || []).slice(0, 3).map(c => ({
+        source:    'YouTube',
+        id:        c.id || c.url,
+        nome:      c.name || c.title,
+        capa:      c.image || c.thumbnail,
+        inscritos: c.subCountLabel || '',
+      }));
 
-      const itens = videos.map(v => ({
+      const musicas = (resultado.videos || []).slice(0, Number(limite)).map(v => ({
         source:    'YouTube',
         id:        v.videoId,
         titulo:    v.title,
@@ -108,7 +143,24 @@ export default async function rotasYoutube(servidor) {
         streamUrl: `/youtube/stream/${v.videoId}`
       }));
 
-      return resposta.send(itens);
+      const playlists = (resultado.playlists || []).slice(0, 5).map(p => ({
+        source:    'YouTube',
+        id:        p.listId,
+        titulo:    p.title,
+        artista:   p.author?.name || 'Desconhecido',
+        capa:      p.image || p.thumbnail,
+        quantidade: p.videoCount || 0
+      }));
+
+      if (musicas.length === 0 && artistas.length === 0 && playlists.length === 0) {
+        return resposta.status(404).send({ erro: 'Nenhum resultado encontrado no YouTube.' });
+      }
+
+      return resposta.send({
+        artistas,
+        musicas,
+        playlists
+      });
     } catch (erro) {
       console.error('[YT BUSCA] Erro:', erro.message);
       return resposta.status(500).send({ erro: 'Erro ao buscar no YouTube.', detalhes: erro.message });
