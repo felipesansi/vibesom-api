@@ -47,7 +47,7 @@ export default async function rotasYoutube(servidor) {
   // ─── BUSCA ────────────────────────────────────────────────────────────────
   servidor.get('/youtube/busca', {
     schema: {
-      description: 'Busca músicas diretamente no YouTube (sem login / sem Spotify)',
+      description: 'Busca artistas, músicas e playlists no YouTube com foco em discografia e perfil do artista (estilo Spotify).',
       tags: ['YouTube'],
       querystring: {
         type: 'object',
@@ -55,7 +55,7 @@ export default async function rotasYoutube(servidor) {
         properties: {
           termo: {
             type: 'string',
-            description: 'Termo de busca (nome da música, artista etc.)'
+            description: 'Termo de busca (nome do artista, música etc.)'
           },
           limite: {
             type: 'integer',
