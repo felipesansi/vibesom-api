@@ -18,6 +18,7 @@ import rotasSaavn from './src/routes/saavn.js';
 import rotasPalco from './src/routes/palco.js';
 import rotasYoutube from './src/routes/youtube.js';
 import rotasMusicBrainz from './src/routes/MusicBrainz.js';
+import rotasResolver from './src/routes/resolver.js';
 
 const servidor = Fastify({
   logger: false,
@@ -109,6 +110,7 @@ servidor.register(rotasVideo)
 servidor.register(rotasSaavn)
 servidor.register(rotasPalco)
 servidor.register(rotasYoutube)
+servidor.register(rotasResolver)
 
 // Para rodar localmente ou em serviços como Render/Railway
 const porta = process.env.PORT || 3333;
