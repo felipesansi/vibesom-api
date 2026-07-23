@@ -17,6 +17,7 @@ import rotasVideo from './src/routes/video.js';
 import rotasSaavn from './src/routes/saavn.js';
 import rotasPalco from './src/routes/palco.js';
 import rotasYoutube from './src/routes/youtube.js';
+import rotasMusicBrainz from './src/routes/MusicBrainz.js';
 
 const servidor = Fastify({
   logger: false,
@@ -103,6 +104,7 @@ servidor.register(rotasMixcloud)
 servidor.register(rotasHearThis)
 servidor.register(rotasBandcamp)
 servidor.register(rotasDailymotion)
+servidor.register(rotasMusicBrainz)
 servidor.register(rotasVideo)
 servidor.register(rotasSaavn)
 servidor.register(rotasPalco)
