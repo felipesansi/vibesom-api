@@ -1,46 +1,6 @@
 import yts from 'yt-search';
-import axios from 'axios';
-
-// Mesmas instâncias Piped já usadas no projeto
-const INSTANCIAS_PIPED = [
-  'https://api.piped.private.coffee',
-  'https://pipedapi.adminforge.de',
-  'https://pipedapi.leptons.xyz',
-  'https://pipedapi.kavin.rocks',
-  'https://api.piped.yt'
-];
-
-/**
- * Tenta buscar o stream de áudio via Piped.
- * Retorna a URL direta do áudio ou null se falhar.
- */
-async function resolverStreamViaPiped(idVideo) {
-  for (const instancia of INSTANCIAS_PIPED) {
-    try {
-      const { data } = await axios.get(`${instancia}/streams/${idVideo}`, {
-        timeout: 8000,
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-
-      // Prefere audioStreams (só áudio, menor tamanho)
-      const audio = data.audioStreams?.find(s => s.url);
-      if (audio?.url) {
-        console.log(`[YT] Piped OK (${instancia}) — audioStream`);
-        return { url: audio.url, tipo: 'audio/mp4' };
-      }
-
-      // Fallback: vídeo com áudio embutido
-      const video = data.videoStreams?.find(s => !s.videoOnly && s.url);
-      if (video?.url) {
-        console.log(`[YT] Piped OK (${instancia}) — videoStream`);
-        return { url: video.url, tipo: 'video/mp4' };
-      }
-    } catch (e) {
-      console.warn(`[YT] Piped ${instancia} falhou:`, e.message);
-    }
-  }
-  return null;
-}
+import { resolverYouTubeDireto, obterMetadadosYouTube, limparTituloMusica, resolverMelhorFonteAudio } from '../lib/fallbackManager.js';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 export default async function rotasYoutube(servidor) {
 
@@ -170,7 +130,7 @@ export default async function rotasYoutube(servidor) {
   // ─── STREAM ───────────────────────────────────────────────────────────────
   servidor.get('/youtube/stream/:idVideo', {
     schema: {
-      description: 'Stream de áudio de um vídeo do YouTube via Piped (sem login)',
+      description: 'Stream de áudio de um vídeo do YouTube com suporte a Range headers e fallback',
       tags: ['YouTube'],
       params: {
         type: 'object',
@@ -194,30 +154,30 @@ export default async function rotasYoutube(servidor) {
     try {
       console.log(`[YT STREAM] ID: ${idVideo}`);
 
-      const stream = await resolverStreamViaPiped(idVideo);
+      // 1. Tenta stream direto via instâncias rápidas
+      const stream = await resolverYouTubeDireto(idVideo);
 
-      if (!stream?.url) {
-        return resposta.status(404).send({
-          erro: 'Não foi possível obter o stream deste vídeo. Tente novamente em instantes.'
+      if (stream?.url) {
+        return fazerProxyStream(requisicao, resposta, stream.url, {
+          defaultContentType: stream.tipo || 'audio/mp4'
         });
       }
 
-      // Faz proxy do stream para o cliente
-      const { data: fluxo, headers } = await axios({
-        method: 'get',
-        url: stream.url,
-        responseType: 'stream',
-        timeout: 20000,
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-
-      resposta.header('Content-Type', headers['content-type'] || stream.tipo || 'audio/mp4');
-      resposta.header('Content-Disposition', 'inline');
-      if (headers['content-length']) {
-        resposta.header('Content-Length', headers['content-length']);
+      // 2. Fallback inteligente
+      const metadados = await obterMetadadosYouTube(idVideo);
+      if (metadados?.titulo) {
+        const tituloLimpo = limparTituloMusica(metadados.titulo);
+        const melhorFonte = await resolverMelhorFonteAudio(metadados.artista, tituloLimpo);
+        if (melhorFonte?.streamUrl) {
+          console.log(`[YT STREAM] Redirecionando para fallback: ${melhorFonte.source}`);
+          return resposta.redirect(melhorFonte.streamUrl);
+        }
       }
 
-      return resposta.send(fluxo);
+      return resposta.status(404).send({
+        erro: 'Não foi possível obter o stream deste vídeo no momento.'
+      });
+
     } catch (erro) {
       console.error('[YT STREAM] Erro:', erro.message);
       return resposta.status(500).send({ erro: 'Erro ao processar stream.', detalhes: erro.message });

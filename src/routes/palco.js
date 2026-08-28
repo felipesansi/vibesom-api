@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 export default async function rotasPalco(servidor) {
 
@@ -107,29 +108,10 @@ export default async function rotasPalco(servidor) {
     const { url } = requisicao.query;
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
-    try {
-        const streamUrl = decodeURIComponent(url);
-        const { data: stream, headers } = await axios({
-            method: 'get',
-            url: streamUrl,
-            responseType: 'stream',
-            timeout: 10000
-        });
-
-        // Repassa headers essenciais, mas força inline para não baixar
-        resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-        resposta.header('Content-Disposition', 'inline');
-        
-        if (headers['content-length']) {
-            resposta.header('Content-Length', headers['content-length']);
-        }
-
-        return resposta.send(stream);
-    } catch (e) {
-        console.error('[PALCO-STREAM] Erro:', e.message);
-        // Fallback: Redireciona se o proxy falhar (pode baixar mas é melhor que erro 500)
-        return resposta.redirect(decodeURIComponent(url));
-    }
+    const streamUrl = decodeURIComponent(url);
+    return fazerProxyStream(requisicao, resposta, streamUrl, {
+      defaultContentType: 'audio/mpeg'
+    });
   });
 }
 

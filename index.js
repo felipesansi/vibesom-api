@@ -19,6 +19,7 @@ import rotasPalco from './src/routes/palco.js';
 import rotasYoutube from './src/routes/youtube.js';
 import rotasMusicBrainz from './src/routes/MusicBrainz.js';
 import rotasResolver from './src/routes/resolver.js';
+import rotasArtists from './src/routes/artists.js';
 
 const servidor = Fastify({
   logger: false,
@@ -31,8 +32,8 @@ servidor.register(swagger, {
     openapi: '3.0.0',
     info: {
       title: 'VibeSom API',
-      description: 'API para busca e streaming de músicas de múltiplas plataformas',
-      version: '1.0.0'
+      description: 'API para busca, streaming de músicas de múltiplas plataformas, gerenciamento de artistas seguidos e novos lançamentos',
+      version: '1.1.0'
     },
     servers: [
       {
@@ -43,7 +44,7 @@ servidor.register(swagger, {
     tags: [
       { name: 'Geral', description: 'Rotas gerais da API' },
       { name: 'Busca', description: 'Rotas de busca de músicas' },
-      { name: 'Artista', description: 'Busca de perfis e discografias completas' },
+      { name: 'Artista', description: 'Perfis, discografias, seguir artistas e novos lançamentos' },
       { name: 'Streaming', description: 'Rotas de streaming de músicas' },
       { name: 'SoundCloud', description: 'Rotas específicas do SoundCloud' },
       { name: 'Audius', description: 'Rotas específicas do Audius' },
@@ -55,7 +56,7 @@ servidor.register(swagger, {
       { name: 'Bandcamp', description: 'Rotas específicas do Bandcamp' },
       { name: 'Palco MP3', description: 'Rotas específicas do Palco MP3' },
       { name: 'Saavn', description: 'Rotas específicas do Saavn' },
-      { name: 'YouTube', description: 'Busca e stream direto do YouTube (sem Spotify)' }
+      { name: 'YouTube', description: 'Busca e stream direto do YouTube com fallback' }
     ]
   }
 })
@@ -70,10 +71,12 @@ servidor.register(swaggerUi, {
   transformStaticCSP: (header) => header
 })
 
-// Habilita CORS para o React Native
+// Habilita CORS completo para React Native e Web
 servidor.register(cors, {
   origin: "*",
-  methods: ["GET"]
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Range", "x-user-id", "user-id", "x-user-email", "Accept"],
+  exposedHeaders: ["Content-Range", "Content-Length", "Accept-Ranges"]
 })
 
 // Rota raiz para teste
@@ -92,7 +95,7 @@ servidor.get('/', {
     }
   }
 }, async () => {
-  return { status: "VibeSom API Online", versao: "1.0.0" }
+  return { status: "VibeSom API Online", versao: "1.1.0" }
 })
 
 servidor.register(rotasPesquisa)
@@ -111,6 +114,7 @@ servidor.register(rotasSaavn)
 servidor.register(rotasPalco)
 servidor.register(rotasYoutube)
 servidor.register(rotasResolver)
+servidor.register(rotasArtists)
 
 // Para rodar localmente ou em serviços como Render/Railway
 const porta = process.env.PORT || 3333;

@@ -1,82 +1,91 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 let cache = {
   clientId: null,
   expires: 0
 };
 
+// Client IDs de contingência conhecidos
+const CLIENT_IDS_FALLBACK = [
+  'a3e059563d7fd3372b49b37f00a00bcf',
+  '2t9loNMn9nKuUsjQcvqwyAffM2xjTGum',
+  'iZIs9mchVcX5lhVR1SlKKdooUegaLIQ2',
+  'b4Jh9DlmFhyHjJ6qf16N5vKj7m3i9e7a'
+];
+
 async function validarClientId(clientId) {
   try {
-    await axios.get("https://api-v2.soundcloud.com/search/tracks", {
+    const res = await axios.get("https://api-v2.soundcloud.com/search/tracks", {
       params: {
         q: "test",
         limit: 1,
         client_id: clientId
       },
-      timeout: 5000
+      timeout: 3000
     });
-
-    return true;
+    return res.status === 200;
   } catch {
     return false;
   }
 }
 
 export async function obterIdCliente() {
-
   if (cache.clientId && Date.now() < cache.expires) {
     return cache.clientId;
   }
 
-  const { data: html } = await axios.get(
-    "https://soundcloud.com/discover",
-    {
-      headers: {
-        "User-Agent": "Mozilla/5.0"
+  // 1. Tenta extrair client_id raspando soundcloud.com
+  try {
+    const { data: html } = await axios.get(
+      "https://soundcloud.com/discover",
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        timeout: 4000
       }
-    }
-  );
+    );
 
-  const scripts = [
-    ...html.matchAll(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js/g)
-  ].map(x => x[0]);
+    const scripts = [
+      ...html.matchAll(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js/g)
+    ].map(x => x[0]);
 
-  for (const script of scripts.reverse()) {
+    for (const script of scripts.reverse().slice(0, 5)) {
+      try {
+        const { data: js } = await axios.get(script, { timeout: 3000 });
+        const encontrados = [...js.matchAll(/[A-Za-z0-9]{32}/g)];
 
-    try {
-
-      const { data: js } = await axios.get(script);
-
-      const encontrados = [
-        ...js.matchAll(/[A-Za-z0-9]{32}/g)
-      ];
-
-      for (const item of encontrados) {
-
-        const candidato = item[0];
-
-        if (await validarClientId(candidato)) {
-
-          cache.clientId = candidato;
-          cache.expires = Date.now() + 1000 * 60 * 60 * 6;
-
-          console.log("Novo client_id:", candidato);
-
-          return candidato;
+        for (const item of encontrados) {
+          const candidato = item[0];
+          if (await validarClientId(candidato)) {
+            cache.clientId = candidato;
+            cache.expires = Date.now() + 1000 * 60 * 60 * 6; // 6 horas
+            return candidato;
+          }
         }
-
-      }
-
-    } catch { }
-
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('[SOUNDCLOUD] Scraping falhou, testando fallback IDs...');
   }
 
-  throw new Error("Não foi possível obter client_id.");
+  // 2. Fallback para client_ids de contingência
+  for (const fallbackId of CLIENT_IDS_FALLBACK) {
+    if (await validarClientId(fallbackId)) {
+      cache.clientId = fallbackId;
+      cache.expires = Date.now() + 1000 * 60 * 60 * 2; // 2 horas
+      return fallbackId;
+    }
+  }
+
+  // Retorna o primeiro fallback se tudo mais falhar
+  return CLIENT_IDS_FALLBACK[0];
 }
 
 export default async function rotasSoundCloud(servidor) {
 
-
+  // BUSCA SOUNDCLOUD
   servidor.get('/soundcloud/search/:consulta', {
     schema: {
       description: 'Busca específica de músicas no SoundCloud',
@@ -119,7 +128,7 @@ export default async function rotasSoundCloud(servidor) {
           q: consulta,
           client_id: cid,
           limit: 30,
-          app_version: '1705658603', // Versão fictícia
+          app_version: '1705658603',
           app_locale: 'en'
         },
         timeout: 5000
@@ -130,9 +139,8 @@ export default async function rotasSoundCloud(servidor) {
       }
 
       const musicas = data.collection
-        .filter(musica => musica.duration > 60000) // Filtra áudios com menos de 60 segundos (previews)
+        .filter(musica => musica.duration > 30000)
         .map(musica => {
-          // Pega a melhor imagem disponível
           let capa = musica.artwork_url || musica.user?.avatar_url;
           if (capa) capa = capa.replace('large', 't500x500');
 
@@ -148,9 +156,8 @@ export default async function rotasSoundCloud(servidor) {
           };
         });
 
-      // Se todas foram filtradas (só tinham previews), retorna erro
       if (musicas.length === 0) {
-        return resposta.status(404).send({ erro: 'Apenas prévias encontradas. Tente outra busca.' });
+        return resposta.status(404).send({ erro: 'Nenhuma música de tamanho completo encontrada.' });
       }
 
       return resposta.status(200).send(musicas);
@@ -164,10 +171,10 @@ export default async function rotasSoundCloud(servidor) {
     }
   });
 
-  // STREAMING SOUNDCLOUD (Proxy para garantir stream inline)
+  // STREAMING SOUNDCLOUD (com proxy e suporte a Range headers)
   servidor.get('/soundcloud/stream/:id', {
     schema: {
-      description: 'Stream de música do SoundCloud',
+      description: 'Stream de música do SoundCloud com suporte a Range headers',
       tags: ['SoundCloud', 'Streaming'],
       params: {
         type: 'object',
@@ -199,7 +206,8 @@ export default async function rotasSoundCloud(servidor) {
       const cid = await obterIdCliente();
 
       const { data: musica } = await axios.get(`https://api-v2.soundcloud.com/tracks/${id}`, {
-        params: { client_id: cid }
+        params: { client_id: cid },
+        timeout: 5000
       });
 
       if (!musica.media || !musica.media.transcodings) {
@@ -215,25 +223,17 @@ export default async function rotasSoundCloud(servidor) {
       }
 
       const { data: informacaoFluxo } = await axios.get(`${alvo.url}`, {
-        params: { client_id: cid }
+        params: { client_id: cid },
+        timeout: 5000
       });
 
-      // Proxy para garantir que toca direto e não baixa
-      const { data: fluxo, headers } = await axios({
-        method: 'get',
-        url: informacaoFluxo.url,
-        responseType: 'stream',
-        timeout: 10000
-      });
-
-      resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-      resposta.header('Content-Disposition', 'inline');
-
-      if (headers['content-length']) {
-        resposta.header('Content-Length', headers['content-length']);
+      if (!informacaoFluxo?.url) {
+        throw new Error('URL de stream do SoundCloud vazia');
       }
 
-      return resposta.send(fluxo);
+      return fazerProxyStream(requisicao, resposta, informacaoFluxo.url, {
+        defaultContentType: 'audio/mpeg'
+      });
 
     } catch (erro) {
       console.error('[SOUNDCLOUD] Erro no stream:', erro.message);
@@ -244,24 +244,31 @@ export default async function rotasSoundCloud(servidor) {
     }
   });
 
-  // CHART BRASIL / TOP 50 (Estilo Spotify)
+  // CHART BRASIL / TOP 50
   servidor.get('/soundcloud/charts/brasil', {
     schema: {
       description: 'Top músicas brasileiras do SoundCloud',
       tags: ['SoundCloud'],
       response: {
         200: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              source: { type: 'string', example: 'SoundCloud' },
-              id: { type: 'string', description: 'ID da música' },
-              titulo: { type: 'string', description: 'Título da música' },
-              artista: { type: 'string', description: 'Nome do artista' },
-              capa: { type: 'string', description: 'URL da capa' },
-              duracao: { type: 'number', description: 'Duração em segundos' },
-              streamUrl: { type: 'string', description: 'URL para streaming' }
+          type: 'object',
+          properties: {
+            titulo: { type: 'string' },
+            descricao: { type: 'string' },
+            musicas: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  source: { type: 'string', example: 'SoundCloud' },
+                  id: { type: 'string', description: 'ID da música' },
+                  titulo: { type: 'string', description: 'Título da música' },
+                  artista: { type: 'string', description: 'Nome do artista' },
+                  capa: { type: 'string', description: 'URL da capa' },
+                  duracao: { type: 'number', description: 'Duração em segundos' },
+                  streamUrl: { type: 'string', description: 'URL para streaming' }
+                }
+              }
             }
           }
         }
@@ -272,20 +279,17 @@ export default async function rotasSoundCloud(servidor) {
       const cid = await obterIdCliente();
 
       const urls = [
-        `https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud%3Agenres%3Aworld&client_id=${cid}&limit=25`, // Funk/Regional
-        `https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud%3Agenres%3Ahiphoprap&client_id=${cid}&limit=25` // Trap/Rap
+        `https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud%3Agenres%3Aworld&client_id=${cid}&limit=25`,
+        `https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud%3Agenres%3Ahiphoprap&client_id=${cid}&limit=25`
       ];
 
-      // Busca tudo em paralelo
-      const respostas = await Promise.all(urls.map(url => axios.get(url)));
+      const respostas = await Promise.all(urls.map(url => axios.get(url).catch(() => ({ data: { collection: [] } }))));
 
-      // Junta e mistura os resultados
       let unificados = [];
       respostas.forEach(r => {
-        if (r.data.collection) unificados.push(...r.data.collection);
+        if (r.data?.collection) unificados.push(...r.data.collection);
       });
 
-      // Formata e remove duplicatas
       const musicas = unificados
         .map(item => {
           const musica = item.track;
@@ -307,11 +311,9 @@ export default async function rotasSoundCloud(servidor) {
           };
         })
         .filter(Boolean)
-        // Filtra duplicatas por ID
         .filter((v, i, a) => a.findIndex(v2 => (v2.id === v.id)) === i)
-        // Ordena por likes/plays para pegar os maiores hits
-        .sort((a, b) => b.plays - a.plays)
-        .slice(0, 50); // Top 50
+        .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+        .slice(0, 50);
 
       return resposta.status(200).send({
         titulo: "Top 50 Brasil (SoundCloud)",
@@ -325,7 +327,7 @@ export default async function rotasSoundCloud(servidor) {
     }
   });
 
-  // TRENDING GERAL (Mantido)
+  // TRENDING GERAL
   servidor.get('/soundcloud/trending', {
     schema: {
       description: 'Músicas em alta no SoundCloud',
@@ -353,9 +355,9 @@ export default async function rotasSoundCloud(servidor) {
       const cid = await obterIdCliente();
       const url = `https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud%3Agenres%3Aall-music&client_id=${cid}&limit=30`;
 
-      const { data } = await axios.get(url);
+      const { data } = await axios.get(url, { timeout: 5000 });
 
-      const musicas = data.collection.map(item => {
+      const musicas = (data.collection || []).map(item => {
         const musica = item.track;
         if (!musica) return null;
 

@@ -1,8 +1,10 @@
 import axios from 'axios';
+import yts from 'yt-search';
 import { ordenarPorRelevancia } from '../lib/iaEscolher.js';
 
 import { obterServidorAtivo as obterServidorAtivoAudius } from './audius.js';
 import { obterIdCliente as obterIdClienteSoundCloud } from './soundcloud.js';
+import { buscarSaavnComEspelhos } from './saavn.js';
 // ============================================================================
 // CONFIGURAÇÕES E HELPERS
 // ============================================================================
@@ -151,31 +153,13 @@ export default async function rotasPesquisa(servidor) {
     // SAAVN
     promessas.push((async () => {
         try {
-            const { data } = await axios.get(`https://saavn.me/search/songs`, {
-                params: { query: termo, limit: 10 },
-                timeout: 4500
-            });
-            if (!data.data || !data.data.results) return [];
-            return data.data.results.map(t => {
-                const urlDownload = t.downloadUrl?.find(q => q.quality === '320kbps')?.link || 
-                                    t.downloadUrl?.find(q => q.quality === '160kbps')?.link || 
-                                    t.downloadUrl?.[0]?.link;
-                return {
-                    source: 'Saavn',
-                    id: t.id,
-                    titulo: t.name,
-                    artista: t.primaryArtists,
-                    capa: t.image?.[2]?.link || t.image?.[0]?.link,
-                    duracao: t.duration,
-                    streamUrl: `/saavn/stream?url=${encodeURIComponent(urlDownload)}`
-                };
-            });
+            return await buscarSaavnComEspelhos(termo);
         } catch(e) { return []; }
     })());
 
-    // YOUTUBE / PIPED
+    // YOUTUBE (Piped com fallback yt-search)
     promessas.push((async () => {
-        for (const instancia of INSTANCIAS_PIPED) {
+        for (const instancia of INSTANCIAS_PIPED.slice(0, 3)) {
             try {
                 const { data } = await axios.get(`${instancia}/search`, {
                     params: { q: termo, filter: 'music_videos' },
@@ -196,6 +180,23 @@ export default async function rotasPesquisa(servidor) {
                 }
             } catch (e) { continue; }
         }
+
+        // Fallback robusto via yt-search
+        try {
+            const ytResult = await yts({ query: `${termo} music`, pages: 1 });
+            if (ytResult.videos && ytResult.videos.length > 0) {
+                return ytResult.videos.slice(0, 10).map(v => ({
+                    source: 'YouTube',
+                    id: v.videoId,
+                    titulo: v.title,
+                    artista: v.author?.name || 'Desconhecido',
+                    capa: v.thumbnail,
+                    duracao: v.seconds || 0,
+                    streamUrl: `/stream/${v.videoId}`
+                }));
+            }
+        } catch (e) {}
+
         return [];
     })());
 

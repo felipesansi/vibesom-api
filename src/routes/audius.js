@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 // Hosts de descoberta do Audius (Load Balancing)
 const AUDIUS_DISCOVERY_NODES = [
@@ -8,16 +9,31 @@ const AUDIUS_DISCOVERY_NODES = [
   'https://audius-dp.delhi.creatorseed.com'
 ];
 
+let hostAudiusCache = {
+  host: null,
+  expiraEm: 0
+};
+
 export const obterServidorAtivo = async () => {
-  for (const host of AUDIUS_DISCOVERY_NODES) {
-    try {
+  if (hostAudiusCache.host && Date.now() < hostAudiusCache.expiraEm) {
+    return hostAudiusCache.host;
+  }
+
+  // Testa os nós em paralelo com Promise.any
+  try {
+    const nodePromises = AUDIUS_DISCOVERY_NODES.map(async (host) => {
       await axios.get(`${host}/health_check`, { timeout: 2000 });
       return host;
-    } catch (e) {
-      continue;
-    }
+    });
+    const activeHost = await Promise.any(nodePromises);
+    hostAudiusCache = {
+      host: activeHost,
+      expiraEm: Date.now() + 10 * 60 * 1000 // 10 min
+    };
+    return activeHost;
+  } catch (e) {
+    return AUDIUS_DISCOVERY_NODES[0];
   }
-  return AUDIUS_DISCOVERY_NODES[0]; // Fallback para o primeiro
 };
 
 export default async function rotasAudius(servidor) {
@@ -191,22 +207,9 @@ export default async function rotasAudius(servidor) {
       const host = await obterServidorAtivo();
       const streamUrl = `${host}/v1/tracks/${id}/stream?app_name=VIBESOM`;
       
-      const { data: stream, headers } = await axios({
-          method: 'get',
-          url: streamUrl,
-          responseType: 'stream',
-          timeout: 10000
+      return fazerProxyStream(requisicao, resposta, streamUrl, {
+        defaultContentType: 'audio/mpeg'
       });
-
-      // Repassa headers essenciais
-      resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-      resposta.header('Content-Disposition', 'inline');
-      
-      if (headers['content-length']) {
-          resposta.header('Content-Length', headers['content-length']);
-      }
-
-      return resposta.send(stream);
     } catch (erro) {
       console.error('[AUDIUS] Erro no stream:', erro.message);
       return resposta.status(500).send({ 
