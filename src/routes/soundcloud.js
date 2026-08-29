@@ -1,5 +1,12 @@
 import axios from 'axios';
 import { fazerProxyStream } from '../lib/streamProxy.js';
+import {
+  criarAutorizacaoSoundCloud,
+  obterUrlCriarContaSoundCloud,
+  obterTokenSoundCloud,
+  soundCloudOAuthConfigurado,
+  trocarCodigoSoundCloud,
+} from '../lib/soundcloudOAuth.js';
 
 let cache = {
   clientId: null,
@@ -85,6 +92,88 @@ export async function obterIdCliente() {
 
 export default async function rotasSoundCloud(servidor) {
 
+  // A conta é opcional: conteúdo público pode continuar sendo pesquisado e
+  // reproduzido mesmo quando esta conexão OAuth não estiver configurada.
+  servidor.get('/soundcloud/acesso', {
+    schema: {
+      description: 'Informa como criar ou conectar opcionalmente uma conta SoundCloud',
+      tags: ['SoundCloud'],
+      querystring: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', description: 'Nonce OAuth gerado pelo cliente' },
+          code_challenge: { type: 'string', description: 'Desafio PKCE S256 gerado pelo cliente' }
+        }
+      }
+    }
+  }, async (requisicao) => {
+    const { state, code_challenge: codeChallenge } = requisicao.query || {};
+    const oauthConfigurado = soundCloudOAuthConfigurado();
+
+    return {
+      requerContaParaPublico: false,
+      mensagem: 'A conta SoundCloud é opcional. Use-a para recursos pessoais; busca e reprodução públicas continuam disponíveis como alternativa quando o YouTube falhar.',
+      criarContaUrl: obterUrlCriarContaSoundCloud(),
+      conectarUrl: oauthConfigurado
+        ? criarAutorizacaoSoundCloud({ state, codeChallenge })
+        : null,
+      oauthConfigurado,
+    };
+  });
+
+  // Troca o código de autorização pelo token sem expor o client_secret ao app.
+  // O aplicativo deve guardar os tokens em armazenamento seguro do dispositivo.
+  servidor.post('/soundcloud/token', {
+    schema: {
+      description: 'Troca um código OAuth SoundCloud por tokens de acesso (OAuth 2.1 + PKCE)',
+      tags: ['SoundCloud'],
+      body: {
+        type: 'object',
+        required: ['code', 'codeVerifier'],
+        properties: {
+          code: { type: 'string' },
+          codeVerifier: { type: 'string', minLength: 43, maxLength: 128 }
+        }
+      }
+    }
+  }, async (requisicao, resposta) => {
+    if (!soundCloudOAuthConfigurado()) {
+      return resposta.status(503).send({ erro: 'OAuth do SoundCloud ainda não foi configurado.' });
+    }
+
+    try {
+      const tokens = await trocarCodigoSoundCloud(requisicao.body.code, requisicao.body.codeVerifier);
+      return resposta.send({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        scope: tokens.scope,
+      });
+    } catch (erro) {
+      return resposta.status(400).send({ erro: erro.message });
+    }
+  });
+
+  servidor.get('/soundcloud/me', {
+    schema: {
+      description: 'Obtém o perfil da conta SoundCloud conectada',
+      tags: ['SoundCloud']
+    }
+  }, async (requisicao, resposta) => {
+    const token = obterTokenSoundCloud(requisicao);
+    if (!token) return resposta.status(401).send({ erro: 'Envie x-soundcloud-access-token para consultar a conta.' });
+
+    try {
+      const { data } = await axios.get('https://api.soundcloud.com/me', {
+        headers: { Authorization: `OAuth ${token}` },
+        timeout: 5_000,
+      });
+      return resposta.send({ id: data.id, nome: data.username, avatarUrl: data.avatar_url });
+    } catch {
+      return resposta.status(401).send({ erro: 'A conexão SoundCloud expirou ou não é válida.' });
+    }
+  });
+
   // BUSCA SOUNDCLOUD
   servidor.get('/soundcloud/search/:consulta', {
     schema: {
@@ -122,29 +211,38 @@ export default async function rotasSoundCloud(servidor) {
     const { consulta } = requisicao.params;
 
     try {
-      const cid = await obterIdCliente();
-      const { data } = await axios.get(`https://api-v2.soundcloud.com/search/tracks`, {
-        params: {
-          q: consulta,
-          client_id: cid,
-          limit: 30,
-          app_version: '1705658603',
-          app_locale: 'en'
-        },
-        timeout: 5000
-      });
+      const tokenConta = obterTokenSoundCloud(requisicao);
+      const { data } = tokenConta
+        ? await axios.get('https://api.soundcloud.com/tracks', {
+          params: { q: consulta, limit: 30 },
+          headers: { Authorization: `OAuth ${tokenConta}` },
+          timeout: 5000,
+        })
+        : await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+          params: {
+            q: consulta,
+            client_id: await obterIdCliente(),
+            limit: 30,
+            app_version: '1705658603',
+            app_locale: 'en'
+          },
+          timeout: 5000
+        });
 
-      if (!data.collection || data.collection.length === 0) {
+      const colecao = Array.isArray(data) ? data : data.collection;
+
+      if (!colecao || colecao.length === 0) {
         return resposta.status(404).send({ erro: 'Nenhuma música encontrada' });
       }
 
-      const musicas = data.collection
+      const musicas = colecao
         .filter(musica => musica.duration > 30000)
         .map(musica => {
           let capa = musica.artwork_url || musica.user?.avatar_url;
           if (capa) capa = capa.replace('large', 't500x500');
 
           return {
+            source: 'SoundCloud',
             id: String(musica.id),
             titulo: musica.title,
             artista: musica.user?.username,
@@ -203,12 +301,16 @@ export default async function rotasSoundCloud(servidor) {
     const { id } = requisicao.params;
 
     try {
-      const cid = await obterIdCliente();
-
-      const { data: musica } = await axios.get(`https://api-v2.soundcloud.com/tracks/${id}`, {
-        params: { client_id: cid },
-        timeout: 5000
-      });
+      const tokenConta = obterTokenSoundCloud(requisicao);
+      const { data: musica } = tokenConta
+        ? await axios.get(`https://api.soundcloud.com/tracks/${encodeURIComponent(id)}`, {
+          headers: { Authorization: `OAuth ${tokenConta}` },
+          timeout: 5000,
+        })
+        : await axios.get(`https://api-v2.soundcloud.com/tracks/${encodeURIComponent(id)}`, {
+          params: { client_id: await obterIdCliente() },
+          timeout: 5000,
+        });
 
       if (!musica.media || !musica.media.transcodings) {
         throw new Error('Música não streamável');
@@ -222,17 +324,17 @@ export default async function rotasSoundCloud(servidor) {
         throw new Error('Nenhum formato compatível encontrado');
       }
 
-      const { data: informacaoFluxo } = await axios.get(`${alvo.url}`, {
-        params: { client_id: cid },
-        timeout: 5000
-      });
+      const { data: informacaoFluxo } = await axios.get(alvo.url, tokenConta
+        ? { headers: { Authorization: `OAuth ${tokenConta}` }, timeout: 5000 }
+        : { params: { client_id: await obterIdCliente() }, timeout: 5000 });
 
       if (!informacaoFluxo?.url) {
         throw new Error('URL de stream do SoundCloud vazia');
       }
 
       return fazerProxyStream(requisicao, resposta, informacaoFluxo.url, {
-        defaultContentType: 'audio/mpeg'
+        defaultContentType: 'audio/mpeg',
+        ...(tokenConta ? { headers: { Authorization: `OAuth ${tokenConta}` } } : {})
       });
 
     } catch (erro) {

@@ -101,6 +101,16 @@ curl "https://vibesom-api-c7re.vercel.app/soundcloud/stream/123456789"
 curl "https://vibesom-api-c7re.vercel.app/audius/stream/D7A7y"
 ```
 
+### Conta SoundCloud opcional
+
+O endpoint `GET /soundcloud/acesso` informa a URL oficial para criar uma conta
+SoundCloud. A conta é opcional para conteúdo público, mas permite conectar o
+usuário via OAuth 2.1 + PKCE para recursos pessoais e itens que dependam da
+conta. Envie `state` e `code_challenge` (S256) gerados pelo aplicativo para
+receber `conectarUrl`; depois envie o `code` retornado e o `codeVerifier` para
+`POST /soundcloud/token`. O token de acesso pode ser enviado em
+`x-soundcloud-access-token` nas rotas de busca, stream e perfil.
+
 ## 📖 Documentação da API
 
 ### 📚 Documentação Interativa
