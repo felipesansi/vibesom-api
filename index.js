@@ -22,8 +22,38 @@ import rotasResolver from './src/routes/resolver.js';
 import rotasArtists from './src/routes/artists.js';
 
 const servidor = Fastify({
-  logger: false,
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.headers.x-soundcloud-access-token'
+      ],
+      censor: '[REDACTED]'
+    }
+  },
   trustProxy: true
+})
+
+servidor.setErrorHandler((erro, requisicao, resposta) => {
+  const statusCode = Number.isInteger(erro.statusCode) && erro.statusCode >= 400 && erro.statusCode <= 599
+    ? erro.statusCode
+    : 500;
+
+  if (statusCode >= 500) {
+    requisicao.log.error({ err: erro }, 'Erro ao processar requisição');
+  } else {
+    requisicao.log.warn({ err: erro }, 'Requisição rejeitada');
+  }
+
+  return resposta.status(statusCode).send({
+    erro: statusCode >= 500 ? 'Erro interno do servidor' : erro.message
+  });
+})
+
+servidor.setNotFoundHandler((requisicao, resposta) => {
+  return resposta.status(404).send({ erro: 'Rota não encontrada' });
 })
 
 // Configuração do Swagger
@@ -121,13 +151,16 @@ const porta = process.env.PORT || 3333;
 
 if (process.env.VERCEL) {
   // Export para o Vercel (opcional, já que está usando serverless lá)
-  console.log('Rodando em modo Vercel');
+  servidor.log.info('Rodando em modo Vercel');
 } else {
   servidor.listen({
     port: porta,
     host: '0.0.0.0'
-  }).then(() => {
-    console.log(`Servidor rodando em: http://0.0.0.0:${porta}`);
+  }).then((endereco) => {
+    servidor.log.info(`Servidor rodando em: ${endereco}`);
+  }).catch((erro) => {
+    servidor.log.fatal({ err: erro }, 'Não foi possível iniciar o servidor');
+    process.exitCode = 1;
   });
 }
 

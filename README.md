@@ -160,6 +160,16 @@ Content-Type: audio/mpeg
 [bytes do arquivo de áudio]
 ```
 
+#### Erros e disponibilidade
+
+Erros não tratados pelos handlers das rotas retornam `500` com uma mensagem
+genérica; detalhes técnicos são registrados nos logs e não enviados ao cliente.
+Rotas inexistentes retornam `404` com `{ "erro": "Rota não encontrada" }`. Na
+busca geral, resultados parciais continuam disponíveis quando algum provedor
+falha; se nenhum resultado puder ser obtido por falha dos provedores, a API
+retorna `502`. Configure `LOG_LEVEL` para ajustar o nível dos logs (padrão:
+`info`). Tokens de autorização e cookies são ocultados nos logs.
+
 ## 🛠️ Tecnologias Utilizadas
 
 - **Runtime**: Node.js 20.x

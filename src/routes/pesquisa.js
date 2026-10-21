@@ -55,6 +55,18 @@ export default async function rotasPesquisa(servidor) {
           properties: {
             erro: { type: 'string' }
           }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            erro: { type: 'string' }
+          }
+        },
+        502: {
+          type: 'object',
+          properties: {
+            erro: { type: 'string' }
+          }
         }
       }
     }
@@ -64,6 +76,11 @@ export default async function rotasPesquisa(servidor) {
 
     const termoCodificado = encodeURIComponent(termo);
     const promessas = [];
+    const falhasProvedores = new Set();
+    const registrarFalhaProvedor = (provedor, erro) => {
+      falhasProvedores.add(provedor);
+      requisicao.log.warn({ err: erro, provedor }, 'Falha ao consultar provedor de busca');
+    };
 
     // SoundCloud
     const buscaSoundCloud = (async () => {
@@ -83,7 +100,10 @@ export default async function rotasPesquisa(servidor) {
                 duracao: Math.floor(t.duration / 1000),
                 streamUrl: `/soundcloud/stream/${t.id}`
             }));
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('SoundCloud', erro);
+            return [];
+        }
     })();
 
     promessas.push(buscaSoundCloud);
@@ -105,7 +125,10 @@ export default async function rotasPesquisa(servidor) {
                 duracao: t.duration,
                 streamUrl: `/audius/stream/${t.id}`
             }));
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('Audius', erro);
+            return [];
+        }
     })());
 
     // JAMENDO
@@ -124,7 +147,10 @@ export default async function rotasPesquisa(servidor) {
                 duracao: t.duration,
                 streamUrl: `/jamendo/stream/${t.id}`
             }));
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('Jamendo', erro);
+            return [];
+        }
     })());
 
     // ARCHIVE.ORG
@@ -142,7 +168,10 @@ export default async function rotasPesquisa(servidor) {
                 capa: `https://archive.org/services/img/${t.identifier}`,
                 streamUrl: `/archive/stream/${t.identifier}`
             }));
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('Archive', erro);
+            return [];
+        }
     })());
 
     // BANDCAMP
@@ -154,7 +183,10 @@ export default async function rotasPesquisa(servidor) {
     promessas.push((async () => {
         try {
             return await buscarSaavnComEspelhos(termo);
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('Saavn', erro);
+            return [];
+        }
     })());
 
     // YOUTUBE (Piped com fallback yt-search)
@@ -195,7 +227,9 @@ export default async function rotasPesquisa(servidor) {
                     streamUrl: `/stream/${v.videoId}`
                 }));
             }
-        } catch (e) {}
+        } catch (erro) {
+            registrarFalhaProvedor('YouTube', erro);
+        }
 
         return [];
     })());
@@ -238,7 +272,10 @@ export default async function rotasPesquisa(servidor) {
                 }
             });
             return musicas.slice(0, 10);
-        } catch(e) { return []; }
+        } catch (erro) {
+            registrarFalhaProvedor('Palco MP3', erro);
+            return [];
+        }
     })());
 
     // EXECUÇÃO EM PARALELO
@@ -247,6 +284,11 @@ export default async function rotasPesquisa(servidor) {
         const unificados = resultados.filter(r => r.status === 'fulfilled').map(r => r.value).flat();
 
         if (unificados.length === 0) {
+            if (falhasProvedores.size > 0) {
+                return resposta.status(502).send({
+                    erro: 'Não foi possível consultar os provedores de busca.'
+                });
+            }
             return resposta.status(404).send({ erro: 'Nada encontrado.' });
         }
 
@@ -254,6 +296,7 @@ export default async function rotasPesquisa(servidor) {
         return resposta.send(ordenados);
 
     } catch (erro) {
+        requisicao.log.error({ err: erro }, 'Erro ao consolidar resultados da busca');
         return resposta.status(500).send({ erro: 'Erro fatal na busca' });
     }
   });
