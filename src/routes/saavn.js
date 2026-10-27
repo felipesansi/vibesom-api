@@ -20,6 +20,7 @@ async function buscarSaavnComEspelhos(consulta) {
       if (Array.isArray(data) && data.length > 0) {
         return data.map(musica => {
           const urlDownload = musica.url || musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || musica.downloadUrl?.[0]?.link;
+          if (!urlDownload) return null;
           return {
             source: 'Saavn',
             id: String(musica.id),
@@ -31,7 +32,7 @@ async function buscarSaavnComEspelhos(consulta) {
             ano: musica.year,
             streamUrl: `/saavn/stream?url=${encodeURIComponent(urlDownload)}`
           };
-        });
+        }).filter(Boolean);
       }
 
       // Formato 2: { status: "SUCCESS", data: { results: [...] } } (saavn.me)
@@ -40,6 +41,7 @@ async function buscarSaavnComEspelhos(consulta) {
           const urlDownload = musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || 
                               musica.downloadUrl?.find(q => q.quality === '160kbps')?.link || 
                               musica.downloadUrl?.[0]?.link;
+          if (!urlDownload) return null;
           let capa = musica.image?.[2]?.link || musica.image?.[0]?.link || (typeof musica.image === 'string' ? musica.image : null);
 
           return {
@@ -53,7 +55,7 @@ async function buscarSaavnComEspelhos(consulta) {
             ano: musica.year,
             streamUrl: `/saavn/stream?url=${encodeURIComponent(urlDownload)}`
           };
-        });
+        }).filter(Boolean);
       }
     } catch (e) {
       continue;
@@ -141,8 +143,7 @@ export default async function rotasSaavn(servidor) {
     const { url } = requisicao.query;
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
-    const urlFluxo = decodeURIComponent(url);
-    return fazerProxyStream(requisicao, resposta, urlFluxo, {
+    return fazerProxyStream(requisicao, resposta, url, {
       defaultContentType: 'audio/mpeg'
     });
   });

@@ -108,8 +108,7 @@ export default async function rotasPalco(servidor) {
     const { url } = requisicao.query;
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
-    const streamUrl = decodeURIComponent(url);
-    return fazerProxyStream(requisicao, resposta, streamUrl, {
+    return fazerProxyStream(requisicao, resposta, url, {
       defaultContentType: 'audio/mpeg'
     });
   });

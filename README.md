@@ -44,7 +44,7 @@ A **VibeSom API** é uma API RESTful desenvolvida em Node.js que permite buscar 
 | **Internet Archive** | ✅ | ✅ | - |
 | **Mixcloud** | ✅ | ❌ | - |
 | **HearThis.at** | ✅ | ✅ | - |
-| **Dailymotion** | ✅ | ✅ | - |
+| **Dailymotion** | ✅ | 🔄 | HLS; requer player compatível |
 | **Bandcamp** | ✅ | ✅ | - |
 | **Palco MP3** | ✅ | ✅ | - |
 | **Saavn** | ✅ | ✅ | - |
@@ -160,6 +160,13 @@ Content-Type: audio/mpeg
 [bytes do arquivo de áudio]
 ```
 
+As rotas de áudio fazem proxy da fonte original e encaminham pedidos `Range`
+para permitir reprodução parcial e busca na faixa. Quando a fonte responde com
+erro ou não retorna áudio (por exemplo, uma página HTML), a API retorna `404`
+ou `502` em vez de redirecionar o player para uma URL externa que pode não ser
+reproduzível. Mixcloud continua sendo um link para WebView; Dailymotion retorna
+HLS e precisa de um player compatível com vídeo/HLS.
+
 #### Erros e disponibilidade
 
 Erros não tratados pelos handlers das rotas retornam `500` com uma mensagem
@@ -200,6 +207,9 @@ npm run dev
 
 # Ou execute em produção
 npm start
+
+# Teste local do proxy de áudio e dos pedidos Range
+npm run test:stream
 ```
 
 ### Estrutura do Projeto

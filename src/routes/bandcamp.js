@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 export default async function rotasBandcamp(servidor) {
   
@@ -137,7 +138,7 @@ export default async function rotasBandcamp(servidor) {
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
     try {
-        const urlAlvo = decodeURIComponent(url);
+        const urlAlvo = url;
         const { data: htmlPagina } = await axios.get(urlAlvo, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -174,22 +175,10 @@ export default async function rotasBandcamp(servidor) {
             return resposta.status(404).send({ erro: 'Stream não encontrado ou bloqueado' });
         }
 
-        // Proxy para garantir que toca direto e não baixa
-        const { data: fluxo, headers } = await axios({
-            method: 'get',
-            url: urlFluxo,
-            responseType: 'stream',
+        return await fazerProxyStream(requisicao, resposta, urlFluxo, {
+            defaultContentType: 'audio/mpeg',
             timeout: 10000
         });
-
-        resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-        resposta.header('Content-Disposition', 'inline');
-        
-        if (headers['content-length']) {
-            resposta.header('Content-Length', headers['content-length']);
-        }
-
-        return resposta.send(fluxo);
 
     } catch (erro) {
         console.error('[BANDCAMP] Erro no stream:', erro.message);

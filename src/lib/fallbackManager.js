@@ -330,7 +330,7 @@ export async function resolverMelhorFonteAudio(artista, faixa) {
       });
       const tracks = data.collection || [];
       return tracks
-        .filter(t => t.duration > 30000)
+        .filter(t => t.duration > 30000 && t.streamable !== false)
         .map(t => ({
           source: 'SoundCloud',
           id: String(t.id),

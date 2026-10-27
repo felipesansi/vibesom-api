@@ -105,7 +105,7 @@ servidor.register(swaggerUi, {
 servidor.register(cors, {
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Range", "x-user-id", "user-id", "x-user-email", "Accept"],
+  allowedHeaders: ["Content-Type", "Authorization", "Range", "x-user-id", "user-id", "x-user-email", "x-soundcloud-access-token", "Accept"],
   exposedHeaders: ["Content-Range", "Content-Length", "Accept-Ranges"]
 })
 

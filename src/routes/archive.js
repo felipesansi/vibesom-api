@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 export default async function rotasArquivo(servidor) {
   
@@ -122,24 +123,11 @@ export default async function rotasArquivo(servidor) {
       }
 
       // Monta a URL direta de download/stream
-      const urlFluxo = `https://${data.d1}${data.dir}/${arquivoAudio.name}`;
-      
-      // Proxy para garantir que toca direto e não baixa
-      const { data: fluxo, headers } = await axios({
-          method: 'get',
-          url: urlFluxo,
-          responseType: 'stream',
-          timeout: 10000
+      const urlFluxo = `https://${data.d1}${data.dir}/${encodeURIComponent(arquivoAudio.name)}`;
+      return await fazerProxyStream(requisicao, resposta, urlFluxo, {
+        defaultContentType: 'audio/mpeg',
+        timeout: 10000
       });
-
-      resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-      resposta.header('Content-Disposition', 'inline');
-      
-      if (headers['content-length']) {
-          resposta.header('Content-Length', headers['content-length']);
-      }
-
-      return resposta.send(fluxo);
 
     } catch (erro) {
       console.error('[ARCHIVE] Erro no stream:', erro.message);

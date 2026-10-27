@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 export default async function rotasHearThis(servidor) {
   
@@ -108,25 +109,13 @@ export default async function rotasHearThis(servidor) {
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
     try {
-        const streamUrl = decodeURIComponent(url);
-        const { data: stream, headers } = await axios({
-            method: 'get',
-            url: streamUrl,
-            responseType: 'stream',
+        return await fazerProxyStream(requisicao, resposta, url, {
+            defaultContentType: 'audio/mpeg',
             timeout: 10000
         });
-
-        resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-        resposta.header('Content-Disposition', 'inline');
-        
-        if (headers['content-length']) {
-            resposta.header('Content-Length', headers['content-length']);
-        }
-
-        return resposta.send(stream);
     } catch (e) {
         console.error('[HEARTHIS-STREAM] Erro:', e.message);
-        return resposta.redirect(decodeURIComponent(url));
+        return resposta.status(502).send({ erro: 'Erro ao acessar stream do HearThis.at' });
     }
   });
 }

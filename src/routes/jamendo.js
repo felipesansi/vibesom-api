@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fazerProxyStream } from '../lib/streamProxy.js';
 
 // ID do Cliente público do Jamendo (usado em demos oficiais)
 const ID_CLIENTE = 'c9720322';
@@ -164,24 +165,13 @@ export default async function rotasJamendo(servidor) {
     }
   }, async (requisicao, resposta) => {
     const { id } = requisicao.params;
-    const urlFluxo = `https://api.jamendo.com/v3.0/tracks/file/?client_id=${ID_CLIENTE}&id=${id}&action=stream`;
+    const urlFluxo = `https://api.jamendo.com/v3.0/tracks/file/?client_id=${ID_CLIENTE}&id=${encodeURIComponent(id)}&action=stream`;
     
     try {
-      const { data: fluxo, headers } = await axios({
-          method: 'get',
-          url: urlFluxo,
-          responseType: 'stream',
-          timeout: 10000
+      return await fazerProxyStream(requisicao, resposta, urlFluxo, {
+        defaultContentType: 'audio/mpeg',
+        timeout: 10000
       });
-
-      resposta.header('Content-Type', headers['content-type'] || 'audio/mpeg');
-      resposta.header('Content-Disposition', 'inline');
-      
-      if (headers['content-length']) {
-          resposta.header('Content-Length', headers['content-length']);
-      }
-
-      return resposta.send(fluxo);
     } catch (erro) {
       console.error('[JAMENDO] Erro no stream:', erro.message);
       return resposta.status(500).send({ 

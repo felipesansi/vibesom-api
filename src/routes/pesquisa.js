@@ -91,7 +91,7 @@ export default async function rotasPesquisa(servidor) {
                 params: { q: termo, client_id: cid, limit: 15 },
                 timeout: 4500
             });
-            return data.collection.map(t => ({
+            return data.collection.filter(t => t.streamable !== false).map(t => ({
                 source: 'SoundCloud',
                 id: String(t.id),
                 titulo: t.title,
