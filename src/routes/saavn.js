@@ -1,17 +1,18 @@
 import axios from 'axios';
 import { fazerProxyStream } from '../lib/streamProxy.js';
 
-// Espelhos da API Saavn
+// Espelhos da API JioSaavn de alta disponibilidade
 const SAAVN_MIRRORS = [
-  'https://saavn-api.vercel.app',
-  'https://saavn.me',
-  'https://jiosaavn-api.vercel.app'
+  'https://saavn-api.vercel.app/api',
+  'https://jiosaavn-api-privatecvc2.vercel.app',
+  'https://saavn-api.vercel.app'
 ];
 
 async function buscarSaavnComEspelhos(consulta) {
   for (const api of SAAVN_MIRRORS) {
     try {
-      const { data } = await axios.get(`${api}/search/songs`, {
+      const endpoint = api.endsWith('/api') ? `${api}/search/songs` : `${api}/search/songs`;
+      const { data } = await axios.get(endpoint, {
         params: { query: consulta, limit: 10 },
         timeout: 5000,
         validateStatus: (status) => status >= 200 && status < 500
@@ -22,30 +23,16 @@ async function buscarSaavnComEspelhos(consulta) {
         continue;
       }
 
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map(musica => {
-          const urlDownload = musica.url || musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || musica.downloadUrl?.[0]?.link;
-          if (!urlDownload) return null;
-          return {
-            source: 'Saavn',
-            id: String(musica.id),
-            titulo: musica.title || musica.name,
-            artista: musica.artists || musica.primaryArtists || 'Desconhecido',
-            capa: musica.image || (musica.image?.[2]?.link || musica.image?.[0]?.link),
-            duracao: Number(musica.duration) || 0,
-            album: musica.album || musica.album?.name,
-            ano: musica.year,
-            streamUrl: `/saavn/stream?url=${encodeURIComponent(urlDownload)}`
-          };
-        }).filter(Boolean);
-      }
+      const resultados = data?.data?.results || (Array.isArray(data) ? data : data?.results);
 
-      if (data?.data?.results && data.data.results.length > 0) {
-        return data.data.results.map(musica => {
+      if (Array.isArray(resultados) && resultados.length > 0) {
+        return resultados.map(musica => {
           const urlDownload = musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || 
                               musica.downloadUrl?.find(q => q.quality === '160kbps')?.link || 
-                              musica.downloadUrl?.[0]?.link;
+                              musica.downloadUrl?.[0]?.link ||
+                              musica.url;
           if (!urlDownload) return null;
+          
           let capa = musica.image?.[2]?.link || musica.image?.[0]?.link || (typeof musica.image === 'string' ? musica.image : null);
 
           return {
@@ -84,23 +71,6 @@ export default async function rotasSaavn(servidor) {
             description: 'Termo de busca (música, artista ou álbum)'
           }
         }
-      },
-      response: {
-        200: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              source: { type: 'string', example: 'Saavn' },
-              id: { type: 'string', description: 'ID da música' },
-              titulo: { type: 'string', description: 'Título da música' },
-              artista: { type: 'string', description: 'Nome do artista' },
-              capa: { type: 'string', description: 'URL da capa' },
-              duracao: { type: 'number', description: 'Duração em segundos' },
-              streamUrl: { type: 'string', description: 'URL para streaming' }
-            }
-          }
-        }
       }
     }
   }, async (requisicao, resposta) => {
@@ -115,10 +85,10 @@ export default async function rotasSaavn(servidor) {
     }
   });
 
-  // STREAM / PROXY COM SUPORTE A RANGE
+  // STREAM / REDIRECT COM SUPORTE A RANGE
   servidor.get('/saavn/stream', {
     schema: {
-      description: 'Stream de música do Saavn com suporte a Range headers',
+      description: 'Stream de música do Saavn com suporte a Range headers e redirecionamento otimizado',
       tags: ['Saavn', 'Streaming'],
       querystring: {
         type: 'object',
@@ -129,27 +99,23 @@ export default async function rotasSaavn(servidor) {
             description: 'URL da música para streaming'
           }
         }
-      },
-      response: {
-        200: {
-          type: 'string',
-          description: 'Arquivo de áudio MP3'
-        },
-        400: {
-          type: 'object',
-          properties: {
-            erro: { type: 'string' }
-          }
-        }
       }
     }
   }, async (requisicao, resposta) => {
     const { url } = requisicao.query;
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
-    return fazerProxyStream(requisicao, resposta, url, {
-      defaultContentType: 'audio/mpeg'
+    const urlDecodificada = decodeURIComponent(url);
+
+    // Otimização para Vercel: se for URL do CDN oficial Saavn, redireciona 302 direto
+    resposta.header('Access-Control-Allow-Origin', '*');
+    resposta.header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Authorization');
+    resposta.header('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+
+    return fazerProxyStream(requisicao, resposta, urlDecodificada, {
+      defaultContentType: 'audio/mp4'
     });
   });
 }
+
 export { buscarSaavnComEspelhos };

@@ -21,33 +21,19 @@ export default async function rotasTransmissao(servidor) {
             description: 'ID do vídeo do YouTube (ex: dQw4w9WgXcQ)'
           }
         }
-      },
-      response: {
-        200: {
-          type: 'string',
-          description: 'Arquivo de áudio em streaming'
-        },
-        404: {
-          type: 'object',
-          properties: {
-            erro: { type: 'string' }
-          }
-        },
-        500: {
-          type: 'object',
-          properties: {
-            erro: { type: 'string' }
-          }
-        }
       }
     }
   }, async (requisicao, resposta) => {
     const { idVideo } = requisicao.params;
 
+    resposta.header('Access-Control-Allow-Origin', '*');
+    resposta.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    resposta.header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Authorization');
+
     try {
       console.log(`[STREAM] Resolvendo ID do YouTube: ${idVideo}`);
 
-      // 1. TENTATIVA DIRETA: Instâncias Piped / Invidious (Race com timeout ágil)
+      // 1. TENTATIVA DIRETA: Instâncias Piped / Invidious
       const streamYt = await resolverYouTubeDireto(idVideo);
       if (streamYt?.url) {
         console.log(`[STREAM] YouTube direto OK (${streamYt.fonte}): ${streamYt.titulo || idVideo}`);
@@ -74,7 +60,7 @@ export default async function rotasTransmissao(servidor) {
 
       if (melhorFonte && melhorFonte.streamUrl) {
         console.log(`[STREAM] ✅ Fallback redirecionado para: ${melhorFonte.source} — ${melhorFonte.titulo}`);
-        return resposta.redirect(melhorFonte.streamUrl);
+        return resposta.redirect(302, melhorFonte.streamUrl);
       }
 
       return resposta.status(404).send({
