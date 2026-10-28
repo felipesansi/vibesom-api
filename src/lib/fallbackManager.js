@@ -185,6 +185,19 @@ async function tentarInstanciaInvidious(instancia, idVideo) {
   }
 }
 
+function eRespostaFonteValida(data) {
+  if (typeof data === 'string') {
+    return !/<html|<!doctype html/i.test(data);
+  }
+
+  if (data && typeof data === 'object') {
+    if (data.status === 'failed' || data.error) return false;
+    if (Array.isArray(data.results) && data.results.length === 0) return false;
+  }
+
+  return true;
+}
+
 export async function resolverYouTubeDireto(idVideo) {
   const cacheKey = `yt_stream_${idVideo}`;
   const emCache = obterCacheStream(cacheKey);
@@ -313,7 +326,7 @@ export async function resolverMelhorFonteAudio(artista, faixa) {
   const buscaSaavn = (async () => {
     try {
       const results = await buscarSaavnComEspelhos(termo);
-      return results.slice(0, 5);
+      return Array.isArray(results) ? results.slice(0, 5) : [];
     } catch (e) {
       return [];
     }

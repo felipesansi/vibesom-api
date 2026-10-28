@@ -316,23 +316,26 @@ export default async function rotasSoundCloud(servidor) {
         throw new Error('Música não streamável');
       }
 
-      const progressivo = musica.media.transcodings.find(t => t.format.protocol === 'progressive');
-      const hls = musica.media.transcodings.find(t => t.format.protocol === 'hls');
+      const progressivo = musica.media.transcodings.find(t => t.format?.protocol === 'progressive');
+      const hls = musica.media.transcodings.find(t => t.format?.protocol === 'hls');
       const alvo = progressivo || hls;
 
       if (!alvo) {
         throw new Error('Nenhum formato compatível encontrado');
       }
 
+      const clientId = await obterIdCliente();
       const { data: informacaoFluxo } = await axios.get(alvo.url, tokenConta
         ? { headers: { Authorization: `OAuth ${tokenConta}` }, timeout: 5000 }
-        : { params: { client_id: await obterIdCliente() }, timeout: 5000 });
+        : { params: { client_id: clientId }, timeout: 5000 });
 
-      if (!informacaoFluxo?.url) {
+      const urlFluxo = informacaoFluxo?.url || informacaoFluxo?.url?.replace?.(/https:\/\/api-v2\.soundcloud\.com\//, 'https://cf-media.sndcdn.com/');
+
+      if (!urlFluxo) {
         throw new Error('URL de stream do SoundCloud vazia');
       }
 
-      return fazerProxyStream(requisicao, resposta, informacaoFluxo.url, {
+      return fazerProxyStream(requisicao, resposta, urlFluxo, {
         defaultContentType: 'audio/mpeg',
         ...(tokenConta ? { headers: { Authorization: `OAuth ${tokenConta}` } } : {})
       });

@@ -13,10 +13,15 @@ async function buscarSaavnComEspelhos(consulta) {
     try {
       const { data } = await axios.get(`${api}/search/songs`, {
         params: { query: consulta, limit: 10 },
-        timeout: 5000
+        timeout: 5000,
+        validateStatus: (status) => status >= 200 && status < 500
       });
 
-      // Formato 1: Array direto (saavn-api.vercel.app)
+      const dadosValidos = typeof data === 'string' ? data : data ?? {};
+      if (typeof dadosValidos === 'string' && /<!doctype html|<html/i.test(dadosValidos)) {
+        continue;
+      }
+
       if (Array.isArray(data) && data.length > 0) {
         return data.map(musica => {
           const urlDownload = musica.url || musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || musica.downloadUrl?.[0]?.link;
@@ -35,7 +40,6 @@ async function buscarSaavnComEspelhos(consulta) {
         }).filter(Boolean);
       }
 
-      // Formato 2: { status: "SUCCESS", data: { results: [...] } } (saavn.me)
       if (data?.data?.results && data.data.results.length > 0) {
         return data.data.results.map(musica => {
           const urlDownload = musica.downloadUrl?.find(q => q.quality === '320kbps')?.link || 
