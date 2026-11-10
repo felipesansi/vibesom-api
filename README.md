@@ -13,7 +13,7 @@ short_description: API de busca e streaming de músicas
 
 [![API Status](https://img.shields.io/badge/Status-Online-green)](https://vibesom-api.vercel.app)
 [![Version](https://img.shields.io/badge/Version-1.0.0-blue)](https://github.com/felipesansi/vibesom-api)
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24.x-green)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 > API completa para busca e streaming de músicas de múltiplas plataformas musicais
@@ -179,7 +179,7 @@ retorna `502`. Configure `LOG_LEVEL` para ajustar o nível dos logs (padrão:
 
 ## 🛠️ Tecnologias Utilizadas
 
-- **Runtime**: Node.js 20.x
+- **Runtime**: Node.js 24.x
 - **Framework**: Fastify
 - **Documentação**: Swagger/OpenAPI 3.0
 - **HTTP Client**: Axios
@@ -190,7 +190,7 @@ retorna `502`. Configure `LOG_LEVEL` para ajustar o nível dos logs (padrão:
 ## 📦 Instalação e Desenvolvimento
 
 ### Pré-requisitos
-- Node.js 20.x ou superior
+- Node.js 24.x ou superior
 - npm ou yarn
 
 ### Instalação
