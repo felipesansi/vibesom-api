@@ -12,6 +12,43 @@
 
 import axios from 'axios';
 
+const MAX_HLS_PLAYLIST_BYTES = 2 * 1024 * 1024;
+
+function ehManifestoHls(contentType, url) {
+  return /mpegurl|vnd\.apple\.mpegurl/i.test(String(contentType || ''))
+    || /\.m3u8(?:$|[?#])/i.test(url);
+}
+
+function absolutizarUrisHls(playlist, urlBase) {
+  const tornarAbsoluta = (uri) => {
+    try {
+      return new URL(uri.trim(), urlBase).toString();
+    } catch {
+      return uri;
+    }
+  };
+
+  return playlist
+    .replace(/^(?!#)([^\r\n]+)$/gm, (linha, uri) => tornarAbsoluta(uri))
+    .replace(/\bURI="([^"]+)"/gi, (atributo, uri) => `URI="${tornarAbsoluta(uri)}"`);
+}
+
+async function lerStreamLimitado(stream, limite) {
+  const partes = [];
+  let total = 0;
+
+  for await (const parte of stream) {
+    total += parte.length;
+    if (total > limite) {
+      stream.destroy();
+      throw new Error('Manifesto HLS excede o limite permitido.');
+    }
+    partes.push(parte);
+  }
+
+  return Buffer.concat(partes, total).toString('utf8');
+}
+
 /**
  * Verifica se a URL pertence a um CDN de áudio público com CORS aberto.
  */
@@ -77,18 +114,19 @@ export async function fazerProxyStream(requisicao, resposta, urlStream, opcoes =
       Object.assign(headersEnvio, opcoes.headers);
     }
 
-    const axiosResponse = await axios({
+    const buscarStream = (headers) => axios({
       method: 'get',
       url: urlStream,
       responseType: 'stream',
       timeout: opcoes.timeout || 20000,
-      headers: headersEnvio,
+      headers,
       maxRedirects: 5,
       validateStatus: () => true
     });
 
-    const status = axiosResponse.status;
-    const headersRecebidos = axiosResponse.headers;
+    let axiosResponse = await buscarStream(headersEnvio);
+    let status = axiosResponse.status;
+    let headersRecebidos = axiosResponse.headers;
 
     if (status >= 400) {
       if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
@@ -99,12 +137,48 @@ export async function fazerProxyStream(requisicao, resposta, urlStream, opcoes =
       return resposta.status(statusCliente).send({ erro });
     }
 
-    const contentTypeRecebido = String(headersRecebidos['content-type'] || '').toLowerCase();
-    if (/^(text\/html|application\/json|text\/plain)(;|$)/i.test(contentTypeRecebido)) {
+    let contentTypeRecebido = String(headersRecebidos['content-type'] || '').toLowerCase();
+    let manifestoHls = ehManifestoHls(contentTypeRecebido, urlStream);
+
+    // Manifestos HLS são pequenos documentos; o Range do player pode truncá-los.
+    // Busca o manifesto completo para que seus URIs possam ser normalizados.
+    if (manifestoHls && range && status === 206) {
+      if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
+      const headersSemRange = { ...headersEnvio };
+      delete headersSemRange.Range;
+      axiosResponse = await buscarStream(headersSemRange);
+      status = axiosResponse.status;
+      headersRecebidos = axiosResponse.headers;
+
+      if (status >= 400) {
+        if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
+        const statusCliente = status >= 500 ? 502 : status;
+        return resposta.status(statusCliente).send({
+          erro: status === 404 ? 'Áudio não encontrado na fonte.' : 'A fonte de áudio retornou HTTP ' + status + '.'
+        });
+      }
+
+      contentTypeRecebido = String(headersRecebidos['content-type'] || '').toLowerCase();
+      manifestoHls = manifestoHls || ehManifestoHls(contentTypeRecebido, urlStream);
+    }
+
+    if (!manifestoHls && /^(text\/html|application\/json|text\/plain)(;|$)/i.test(contentTypeRecebido)) {
       if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
       return resposta.status(502).send({
         erro: 'A fonte não retornou um arquivo de áudio reproduzível.'
       });
+    }
+
+    if (manifestoHls) {
+      const playlistOriginal = await lerStreamLimitado(axiosResponse.data, MAX_HLS_PLAYLIST_BYTES);
+      const urlBase = axiosResponse.request?.res?.responseUrl || urlStream;
+      const playlist = absolutizarUrisHls(playlistOriginal, urlBase);
+      const contentType = headersRecebidos['content-type'] || 'application/vnd.apple.mpegurl';
+      resposta.status(200);
+      resposta.header('Content-Type', contentType);
+      resposta.header('Content-Disposition', 'inline');
+      resposta.header('Content-Length', Buffer.byteLength(playlist));
+      return resposta.send(playlist);
     }
 
     resposta.status(status);

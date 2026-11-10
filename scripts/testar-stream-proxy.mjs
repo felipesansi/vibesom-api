@@ -6,6 +6,14 @@ import { after, before, test } from 'node:test';
 import { fazerProxyStream } from '../src/lib/streamProxy.js';
 
 const bytesAudio = Buffer.from('0123456789');
+const manifestoHls = Buffer.from([
+  '#EXTM3U',
+  '#EXT-X-KEY:METHOD=AES-128,URI="keys/key.bin"',
+  '#EXTINF:4.0,',
+  'v0.m3u8',
+  ''
+].join('\n'));
+const rangesManifestoHls = [];
 const origem = http.createServer((requisicao, resposta) => {
   if (requisicao.url === '/not-found') {
     resposta.writeHead(404, { 'Content-Type': 'application/json' });
@@ -16,6 +24,28 @@ const origem = http.createServer((requisicao, resposta) => {
   if (requisicao.url === '/html') {
     resposta.writeHead(200, { 'Content-Type': 'text/html' });
     resposta.end('<html>blocked</html>');
+    return;
+  }
+
+  if (requisicao.url === '/hls/master.m3u8') {
+    rangesManifestoHls.push(requisicao.headers.range || null);
+    if (requisicao.headers.range === 'bytes=0-9') {
+      const parcial = manifestoHls.subarray(0, 10);
+      resposta.writeHead(206, {
+        'Accept-Ranges': 'bytes',
+        'Content-Length': parcial.length,
+        'Content-Range': `bytes 0-9/${manifestoHls.length}`,
+        'Content-Type': 'application/x-mpegurl'
+      });
+      resposta.end(parcial);
+      return;
+    }
+
+    resposta.writeHead(200, {
+      'Content-Length': manifestoHls.length,
+      'Content-Type': 'application/x-mpegurl'
+    });
+    resposta.end(manifestoHls);
     return;
   }
 
@@ -56,6 +86,9 @@ before(async () => {
   );
   servidor.get('/html', (requisicao, resposta) =>
     fazerProxyStream(requisicao, resposta, `${urlOrigem}/html`)
+  );
+  servidor.get('/playlist', (requisicao, resposta) =>
+    fazerProxyStream(requisicao, resposta, `${urlOrigem}/hls/master.m3u8`)
   );
   servidor.get('/invalid', (requisicao, resposta) =>
     fazerProxyStream(requisicao, resposta, 'file:///tmp/audio.mp3')
@@ -101,6 +134,19 @@ test('rejeita páginas HTML como se fossem streams de áudio', async () => {
 
   assert.equal(resposta.statusCode, 502);
   assert.match(resposta.json().erro, /não retornou um arquivo de áudio/i);
+});
+
+test('normaliza URIs relativos do manifesto HLS e ignora Range truncado', async () => {
+  const resposta = await servidor.inject({
+    url: '/playlist',
+    headers: { range: 'bytes=0-9' }
+  });
+
+  assert.equal(resposta.statusCode, 200);
+  assert.equal(resposta.headers['content-type'], 'application/x-mpegurl');
+  assert.match(resposta.body, new RegExp(`${urlOrigem}/hls/keys/key\\.bin`));
+  assert.match(resposta.body, new RegExp(`${urlOrigem}/hls/v0\\.m3u8`));
+  assert.deepEqual(rangesManifestoHls, ['bytes=0-9', null]);
 });
 
 test('rejeita esquemas de URL que não sejam HTTP ou HTTPS', async () => {
