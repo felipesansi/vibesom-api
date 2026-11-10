@@ -92,8 +92,19 @@ export async function fazerProxyStream(requisicao, resposta, urlStream, opcoes =
 
     if (status >= 400) {
       if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
-      // Fallback gracioso: se o proxy falhar mas tivermos a URL, tenta redirecionar
-      return resposta.redirect(302, urlStream);
+      const statusCliente = status >= 500 ? 502 : status;
+      const erro = status === 404
+        ? 'Áudio não encontrado na fonte.'
+        : 'A fonte de áudio retornou HTTP ' + status + '.';
+      return resposta.status(statusCliente).send({ erro });
+    }
+
+    const contentTypeRecebido = String(headersRecebidos['content-type'] || '').toLowerCase();
+    if (/^(text\/html|application\/json|text\/plain)(;|$)/i.test(contentTypeRecebido)) {
+      if (axiosResponse.data?.destroy) axiosResponse.data.destroy();
+      return resposta.status(502).send({
+        erro: 'A fonte não retornou um arquivo de áudio reproduzível.'
+      });
     }
 
     resposta.status(status);
@@ -115,12 +126,6 @@ export async function fazerProxyStream(requisicao, resposta, urlStream, opcoes =
     return resposta.send(axiosResponse.data);
 
   } catch (erro) {
-    // Se der erro no proxy, tenta redirect 302 direto para não quebrar a música
-    if (urlStream && urlStream.startsWith('http')) {
-      resposta.header('Access-Control-Allow-Origin', '*');
-      return resposta.redirect(302, urlStream);
-    }
-
     if (!resposta.sent) {
       return resposta.status(502).send({ erro: 'Não foi possível reproduzir a faixa.', detalhes: erro.message });
     }

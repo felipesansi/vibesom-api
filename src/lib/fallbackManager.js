@@ -86,6 +86,22 @@ export async function validarUrlStream(url, timeout = 2500) {
   if (!url || typeof url !== 'string') return false;
   if (url.startsWith('/')) return true; // URLs internas da API
 
+  let urlAlvo;
+  try {
+    urlAlvo = new URL(url);
+  } catch {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(urlAlvo.protocol)) return false;
+
+  const tipoDeConteudoValido = (contentType) => {
+    const tipo = String(contentType || '').split(';', 1)[0].trim().toLowerCase();
+    if (!tipo) return true;
+    if (tipo.startsWith('text/')) return false;
+    if (tipo === 'application/json' || tipo.endsWith('+json')) return false;
+    return true;
+  };
+
   try {
     const res = await axios({
       method: 'head',
@@ -96,26 +112,26 @@ export async function validarUrlStream(url, timeout = 2500) {
       validateStatus: (status) => status >= 200 && status < 400
     });
 
-    const cType = res.headers['content-type'] || '';
-    if (cType.includes('text/html') || cType.includes('application/json')) {
-      return false;
-    }
-    return true;
+    return tipoDeConteudoValido(res.headers['content-type']);
   } catch (e) {
     // Se HEAD for bloqueado (alguns CDNs bloqueiam HEAD), tenta um GET curto com Range
     try {
       const resGet = await axios({
         method: 'get',
         url,
-        timeout: 2000,
+        timeout: Math.min(timeout, 2000),
+        responseType: 'stream',
         headers: {
           'User-Agent': 'Mozilla/5.0',
           'Range': 'bytes=0-10'
         },
         maxRedirects: 3,
-        validateStatus: (status) => (status >= 200 && status < 400)
+        validateStatus: () => true
       });
-      return true;
+      const statusValido = resGet.status >= 200 && resGet.status < 400;
+      const tipoValido = tipoDeConteudoValido(resGet.headers['content-type']);
+      if (resGet.data?.destroy) resGet.data.destroy();
+      return statusValido && tipoValido;
     } catch (e2) {
       return false;
     }
@@ -126,14 +142,34 @@ export async function validarUrlStream(url, timeout = 2500) {
 // RESOLUÇÃO DE STREAM YOUTUBE (PIPED + INVIDIOUS COM CONCORRÊNCIA RÁPIDA)
 // ============================================================================
 
-function extrairAudioPiped(dados) {
-  const audio = dados.audioStreams?.find((s) => s.url);
-  if (audio?.url) return { url: audio.url, titulo: dados.title, tipo: audio.mimeType || 'audio/mp4', fonte: 'piped_audio' };
+async function selecionarPrimeiroFormatoValido(formatos, criarResultado) {
+  const candidatos = (formatos || []).filter((formato) => formato?.url).slice(0, 3);
+  if (candidatos.length === 0) return null;
 
-  const video = dados.videoStreams?.find((s) => !s.videoOnly && s.url) || dados.videoStreams?.find((s) => s.url);
-  if (video?.url) return { url: video.url, titulo: dados.title, tipo: video.mimeType || 'video/mp4', fonte: 'piped_video' };
+  try {
+    return await Promise.any(candidatos.map(async (formato) => {
+      if (!(await validarUrlStream(formato.url, 2000))) {
+        throw new Error('URL de mídia indisponível ou não é áudio/vídeo.');
+      }
+      return criarResultado(formato);
+    }));
+  } catch (erro) {
+    return null;
+  }
+}
 
-  return null;
+async function extrairAudioPiped(dados) {
+  const audio = await selecionarPrimeiroFormatoValido(
+    dados.audioStreams,
+    (stream) => ({ url: stream.url, titulo: dados.title, tipo: stream.mimeType || 'audio/mp4', fonte: 'piped_audio' })
+  );
+  if (audio) return audio;
+
+  const video = await selecionarPrimeiroFormatoValido(
+    (dados.videoStreams || []).filter((stream) => !stream.videoOnly),
+    (stream) => ({ url: stream.url, titulo: dados.title, tipo: stream.mimeType || 'video/mp4', fonte: 'piped_video' })
+  );
+  return video;
 }
 
 async function tentarInstanciaPiped(instancia, idVideo) {
@@ -147,7 +183,7 @@ async function tentarInstanciaPiped(instancia, idVideo) {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    const stream = extrairAudioPiped(data);
+    const stream = await extrairAudioPiped(data);
     if (stream?.url) {
       return stream;
     }
@@ -169,15 +205,17 @@ async function tentarInstanciaInvidious(instancia, idVideo) {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    const formatAudio = data.adaptiveFormats?.find((f) => f.type?.startsWith('audio/'));
-    if (formatAudio?.url) {
-      return { url: formatAudio.url, titulo: data.title, tipo: formatAudio.type || 'audio/mp4', fonte: 'invidious_audio' };
-    }
+    const formatAudio = await selecionarPrimeiroFormatoValido(
+      (data.adaptiveFormats || []).filter((format) => format.type?.startsWith('audio/')),
+      (format) => ({ url: format.url, titulo: data.title, tipo: format.type || 'audio/mp4', fonte: 'invidious_audio' })
+    );
+    if (formatAudio) return formatAudio;
 
-    const formatVideo = data.formatStreams?.find((f) => f.url);
-    if (formatVideo?.url) {
-      return { url: formatVideo.url, titulo: data.title, tipo: formatVideo.type || 'video/mp4', fonte: 'invidious_video' };
-    }
+    const formatVideo = await selecionarPrimeiroFormatoValido(
+      data.formatStreams,
+      (format) => ({ url: format.url, titulo: data.title, tipo: format.type || 'video/mp4', fonte: 'invidious_video' })
+    );
+    if (formatVideo) return formatVideo;
     throw new Error('Sem stream invidious');
   } catch (erro) {
     marcarFalha(instancia);
@@ -201,7 +239,8 @@ function eRespostaFonteValida(data) {
 export async function resolverYouTubeDireto(idVideo) {
   const cacheKey = `yt_stream_${idVideo}`;
   const emCache = obterCacheStream(cacheKey);
-  if (emCache) return emCache;
+  if (emCache && await validarUrlStream(emCache.url, 2000)) return emCache;
+  if (emCache) cacheStreams.delete(cacheKey);
 
   // Filtra instâncias saudáveis
   const pipedDisponiveis = INSTANCIAS_PIPED.filter(inst => !estaEmCooldown(inst));

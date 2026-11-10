@@ -105,7 +105,9 @@ export default async function rotasSaavn(servidor) {
     const { url } = requisicao.query;
     if (!url) return resposta.status(400).send({ erro: 'URL necessária' });
 
-    const urlDecodificada = decodeURIComponent(url);
+    // Fastify já decodifica os parâmetros de query. Decodificar novamente
+    // pode alterar a URL assinada do CDN (por exemplo, %2F ou %3D).
+    const urlDecodificada = url;
 
     // Otimização para Vercel: se for URL do CDN oficial Saavn, redireciona 302 direto
     resposta.header('Access-Control-Allow-Origin', '*');
