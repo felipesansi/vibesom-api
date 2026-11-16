@@ -60,7 +60,7 @@ export default async function rotasTransmissao(servidor) {
 
       if (melhorFonte && melhorFonte.streamUrl) {
         console.log(`[STREAM] ✅ Fallback redirecionado para: ${melhorFonte.source} — ${melhorFonte.titulo}`);
-        return resposta.redirect(302, melhorFonte.streamUrl);
+        return resposta.redirect(melhorFonte.streamUrl, 302);
       }
 
       return resposta.status(404).send({

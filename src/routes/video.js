@@ -61,6 +61,10 @@ export default async function rotasVideo(servidor) {
     const { id } = requisicao.params;
     const { qualidade = '720p' } = requisicao.query; 
 
+    resposta.header('Access-Control-Allow-Origin', '*');
+    resposta.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    resposta.header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Authorization');
+
     console.log(`[VIDEO] Buscando MP4 para ${id} (${qualidade})...`);
 
     // TENTATIVA 1: COBALT (A melhor opção atual para bypass)
@@ -80,7 +84,7 @@ export default async function rotasVideo(servidor) {
             const link = data.url || data.picker?.[0]?.url;
             if (link) {
                 console.log(`[VIDEO] ✅ Cobalt Sucesso (${api})`);
-                return resposta.status(302).redirect(link);
+                return resposta.redirect(link, 302);
             }
         } catch (e) { continue; }
     }
@@ -106,7 +110,7 @@ export default async function rotasVideo(servidor) {
 
             if (stream && stream.url) {
                 console.log(`[VIDEO] ✅ Piped Sucesso (${api})`);
-                return resposta.status(302).redirect(stream.url);
+                return resposta.redirect(stream.url, 302);
             }
         } catch (e) { continue; }
     }
@@ -126,7 +130,7 @@ export default async function rotasVideo(servidor) {
 
         if (formato && formato.url) {
             console.log('[VIDEO] ✅ YTDL Sucesso!');
-            return resposta.status(302).redirect(formato.url);
+            return resposta.redirect(formato.url, 302);
         }
     } catch (e) {}
 

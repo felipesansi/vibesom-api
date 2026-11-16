@@ -1,28 +1,23 @@
 import axios from 'axios';
+import { buscarSaavnComEspelhos } from './src/routes/saavn.js';
+import { obterIdCliente } from './src/routes/soundcloud.js';
 
 async function testarFontes() {
   console.log('--- TESTANDO JIOSAAVN ---');
   try {
-    const res = await axios.get('https://saavn-api.vercel.app/api/search/songs?query=eminem lose yourself&limit=3', { timeout: 6000 });
-    console.log('Saavn (saavn-api.vercel.app/api):', res.status, res.data?.data?.results?.length || res.data?.results?.length || 0, 'resultados');
-    const first = res.data?.data?.results?.[0] || res.data?.results?.[0];
-    if (first) {
-      console.log('Primeira música Saavn:', first.name || first.title, first.downloadUrl?.[0]?.link || first.url);
+    const musicas = await buscarSaavnComEspelhos('eminem lose yourself');
+    console.log('JioSaavn direto/espelhos:', musicas.length, 'músicas encontradas');
+    if (musicas[0]) {
+      console.log('Primeira música Saavn:', musicas[0].titulo, 'por', musicas[0].artista, musicas[0].streamUrl);
     }
   } catch (e) {
-    console.log('Saavn saavn-api falhou:', e.message);
-  }
-
-  try {
-    const res = await axios.get('https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=eminem lose yourself&limit=3', { timeout: 6000 });
-    console.log('Saavn (jiosaavn-api-privatecvc2):', res.status, res.data?.data?.results?.length || 0, 'resultados');
-  } catch (e) {
-    console.log('Saavn jiosaavn-api falhou:', e.message);
+    console.log('JioSaavn falhou:', e.message);
   }
 
   console.log('\n--- TESTANDO SOUNDCLOUD ---');
   try {
-    const cid = 'iZIs9mchVcX5lhVR1SlKKdooUegaLIQ2';
+    const cid = await obterIdCliente();
+    console.log('SoundCloud Client ID obtido:', cid);
     const res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
       params: { q: 'eminem lose yourself', client_id: cid, limit: 3 },
       timeout: 6000

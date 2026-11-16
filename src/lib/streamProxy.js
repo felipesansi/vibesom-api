@@ -94,8 +94,9 @@ export async function fazerProxyStream(requisicao, resposta, urlStream, opcoes =
     // Se a URL for de CDN confiável ou se for na Vercel sem Range estrito, redireciona 302!
     // Players móveis (React Native Track Player, iOS AVPlayer, Android ExoPlayer)
     // seguem redirects HTTP 302 automaticamente e reproduzem diretamente do CDN.
-    if (podeRedirecionarDireto(urlStream)) {
-      return resposta.redirect(302, urlStream);
+    // Observação: playlists HLS (.m3u8) passam pelo proxy para normalização de URIs relativos.
+    if (!ehManifestoHls('', urlStream) && podeRedirecionarDireto(urlStream)) {
+      return resposta.redirect(urlStream, 302);
     }
 
     // 2. PROXY COM STREAM (para fontes que exigem headers customizados ou não permitem redirect)

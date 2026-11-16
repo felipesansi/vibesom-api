@@ -102,6 +102,10 @@ export default async function rotasDailymotion(servidor) {
     }
   }, async (requisicao, resposta) => {
     const { id } = requisicao.params;
+
+    resposta.header('Access-Control-Allow-Origin', '*');
+    resposta.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    resposta.header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Authorization');
     
     try {
         // Pega metadados do player interno para achar o HLS (.m3u8)
@@ -133,7 +137,7 @@ export default async function rotasDailymotion(servidor) {
 
         // Redireciona para o .m3u8 (HLS)
         // Frontend deve usar um player compatível com HLS (Ex: React Native Video, VideoJS)
-        return resposta.status(302).redirect(streamUrl);
+        return resposta.redirect(streamUrl, 302);
 
     } catch (erro) {
       console.error('[DAILYMOTION] Erro no stream:', erro.message);

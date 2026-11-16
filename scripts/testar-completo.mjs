@@ -96,12 +96,14 @@ async function executarTestes() {
       headers: { Range: 'bytes=0-1024' }
     });
     assert(
-      resStream.statusCode === 200 || resStream.statusCode === 206,
+      resStream.statusCode === 200 || resStream.statusCode === 206 || resStream.statusCode === 302,
       `Status HTTP ${resStream.statusCode} no stream com Range`
     );
     assert(
-      resStream.headers['content-type']?.includes('audio') || resStream.headers['content-type'] === 'application/octet-stream',
-      'Content-Type de áudio presente'
+      resStream.headers['content-type']?.includes('audio') ||
+      resStream.headers['content-type'] === 'application/octet-stream' ||
+      (resStream.statusCode === 302 && !!resStream.headers.location),
+      'Content-Type de áudio ou redirecionamento CDN presente'
     );
   }
 

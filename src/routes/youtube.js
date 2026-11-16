@@ -151,6 +151,10 @@ export default async function rotasYoutube(servidor) {
   }, async (requisicao, resposta) => {
     const { idVideo } = requisicao.params;
 
+    resposta.header('Access-Control-Allow-Origin', '*');
+    resposta.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    resposta.header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Authorization');
+
     try {
       console.log(`[YT STREAM] ID: ${idVideo}`);
 
@@ -170,7 +174,7 @@ export default async function rotasYoutube(servidor) {
         const melhorFonte = await resolverMelhorFonteAudio(metadados.artista, tituloLimpo);
         if (melhorFonte?.streamUrl) {
           console.log(`[YT STREAM] Redirecionando para fallback: ${melhorFonte.source}`);
-          return resposta.redirect(melhorFonte.streamUrl);
+          return resposta.redirect(melhorFonte.streamUrl, 302);
         }
       }
 
